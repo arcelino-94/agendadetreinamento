@@ -15,6 +15,7 @@ import {
   INITIAL_TURMAS 
 } from '../data/mockData';
 import { isOverlapping } from '../lib/planningEngine';
+import { DEFAULT_FIREBASE_CONFIG, saveStateToFirestore, subscribeToFirestore } from '../lib/firebase';
 
 interface AppContextType {
   multiplicadores: Multiplicador[];
@@ -107,6 +108,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsedFb = JSON.parse(fbSaved);
         setFirebaseConfigState(parsedFb);
         setIsFirebaseConnected(true);
+      } else {
+        setFirebaseConfigState(DEFAULT_FIREBASE_CONFIG);
+        setIsFirebaseConnected(true);
+        localStorage.setItem('td_callcenter_firebase_config', JSON.stringify(DEFAULT_FIREBASE_CONFIG));
       }
     } catch (e) {
       console.error('Erro ao inicializar dados locais:', e);
@@ -118,7 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // 2. Salvar no LocalStorage e notificar outras abas
+  // 2. Salvar no LocalStorage, Firestore e notificar outras abas
   const persistAndNotify = useCallback((data: {
     multiplicadores: Multiplicador[];
     celulas: CelulaAtendimento[];
@@ -133,10 +138,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bc.postMessage({ type: 'DATA_UPDATED', data });
         bc.close();
       }
+      saveStateToFirestore(data);
     } catch (err) {
       console.error('Erro ao persistir estado:', err);
     }
   }, []);
+
+  // Listener Firestore em Tempo Real
+  useEffect(() => {
+    if (!isFirebaseConnected) return;
+    const unsubscribe = subscribeToFirestore((data) => {
+      if (data) {
+        if (data.multiplicadores) setMultiplicadores(data.multiplicadores);
+        if (data.celulas) setCelulas(data.celulas);
+        if (data.salas) setSalas(data.salas);
+        if (data.demandas) setDemandas(data.demandas);
+        if (data.turmas) setTurmas(data.turmas);
+      }
+    }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [isFirebaseConnected, firebaseConfig]);
 
   // Listener para sincronização em tempo real entre abas no mesmo navegador
   useEffect(() => {
