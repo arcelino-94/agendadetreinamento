@@ -1,0 +1,6 @@
+{
+  "name": "Gestão T&D Call Center",
+  "description": "Sistema de Gestão e Planejamento Inteligente de Treinamentos para T&D Call Center com agenda em grade, controle de salas, multiplicadores e assistente de turmas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
