@@ -6,16 +6,6 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     base: './',
-    build: {
-      assetsDir: '',
-      rollupOptions: {
-        output: {
-          entryFileNames: '[name].js',
-          chunkFileNames: '[name].js',
-          assetFileNames: '[name].[ext]'
-        }
-      }
-    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

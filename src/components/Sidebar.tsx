@@ -5,6 +5,7 @@ import {
   Sparkles, 
   FileText, 
   UserCheck, 
+  Award,
   Building2, 
   BarChart3,
   AlertCircle
@@ -26,7 +27,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'agenda',
-      label: 'Agenda em Grade',
+      label: 'Agenda de Capacidade',
       icon: CalendarRange,
       badge: null
     },
@@ -42,13 +43,23 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'demandas',
-      label: 'Demandas & Pedidos',
+      label: 'Fila de Demandas',
       icon: FileText,
       badge: pendingCount > 0 ? (
         <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold px-1.5 py-0.2 rounded text-[10px]">
           {pendingCount}
         </span>
       ) : null
+    },
+    {
+      id: 'matriz',
+      label: 'Matriz Competências',
+      icon: Award,
+      badge: (
+        <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold px-1.5 py-0.2 rounded text-[10px]">
+          Novo
+        </span>
+      )
     },
     {
       id: 'multiplicadores',

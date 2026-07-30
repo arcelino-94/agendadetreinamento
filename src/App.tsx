@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { AgendaGrid } from './components/AgendaGrid';
 import { AssistentePlanejamentoView } from './components/AssistentePlanejamentoView';
 import { DemandasView } from './components/DemandasView';
+import { MatrizEspecialidadesView } from './components/MatrizEspecialidadesView';
 import { MultiplicadoresView } from './components/MultiplicadoresView';
 import { SalasView } from './components/SalasView';
 import { RelatoriosView } from './components/RelatoriosView';
@@ -18,9 +19,7 @@ import { FirebaseConfigModal } from './components/FirebaseConfigModal';
 import { Demanda, Turma } from './types';
 
 export function AppContent() {
-  const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'agenda' | 'demandas' | 'assistente' | 'multiplicadores' | 'salas' | 'relatorios'
-  >('dashboard');
+  const { activeTab, setActiveTab } = useApp();
 
   // Modals state
   const [isNovaDemandaOpen, setIsNovaDemandaOpen] = useState(false);
@@ -56,6 +55,24 @@ export function AppContent() {
     }
   };
 
+  const handleEditTurma = (turma: Turma) => {
+    handleOpenNovaTurma({
+      editingTurmaId: turma.id,
+      multiplicadorId: turma.multiplicadorId,
+      salaId: turma.salaId,
+      data: turma.data,
+      horarioInicio: turma.horarioInicio,
+      horarioFim: turma.horarioFim,
+      demandaIds: turma.demandaIds,
+      tema: turma.tema,
+      nomeTurma: turma.nomeTurma,
+      qtdParticipantes: turma.qtdParticipantes,
+      celulasNomes: turma.celulasNomes,
+      tipo: turma.tipo,
+      observacoes: turma.observacoes
+    });
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       
@@ -63,7 +80,7 @@ export function AppContent() {
       <Header 
         onOpenNovaDemanda={handleOpenNovaDemanda}
         onOpenNovaTurma={() => handleOpenNovaTurma()}
-        onOpenFirebaseConfig={() => setIsFirebaseModalOpen(true)}
+        onOpenFirebaseModal={() => setIsFirebaseModalOpen(true)}
       />
 
       <div className="flex-1 flex max-w-[1720px] w-full mx-auto px-3 py-3 gap-3">
@@ -104,6 +121,10 @@ export function AppContent() {
             />
           )}
 
+          {activeTab === 'matriz' && (
+            <MatrizEspecialidadesView />
+          )}
+
           {activeTab === 'multiplicadores' && (
             <MultiplicadoresView />
           )}
@@ -135,6 +156,7 @@ export function AppContent() {
       <TurmaDetalhesModal 
         turma={selectedTurmaDetail}
         onClose={() => setSelectedTurmaDetail(null)}
+        onEditTurma={handleEditTurma}
       />
 
       <FirebaseConfigModal 

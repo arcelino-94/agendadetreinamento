@@ -6,11 +6,13 @@ import { Turma } from '../types';
 interface TurmaDetalhesModalProps {
   turma: Turma | null;
   onClose: () => void;
+  onEditTurma?: (turma: Turma) => void;
 }
 
 export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
   turma,
-  onClose
+  onClose,
+  onEditTurma
 }) => {
   const { updateTurma, deleteTurma } = useApp();
 
@@ -106,13 +108,28 @@ export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
         </div>
 
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <button
-            onClick={handleExcluir}
-            className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Excluir</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleExcluir}
+              className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Excluir</span>
+            </button>
+
+            {onEditTurma && (
+              <button
+                onClick={() => {
+                  const target = turma;
+                  onClose();
+                  onEditTurma(target);
+                }}
+                className="px-3 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 dark:text-amber-300 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1"
+              >
+                <span>Editar Dados</span>
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center space-x-2">
             {turma.status !== 'Finalizado' && (

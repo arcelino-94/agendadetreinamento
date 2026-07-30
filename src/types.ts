@@ -4,7 +4,7 @@ export type Prioridade = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
 
 export type StatusDemanda = 'Novo' | 'Em Planejamento' | 'Agendado' | 'Em Execução' | 'Finalizado' | 'Cancelado';
 
-export type StatusMultiplicador = 'Disponível' | 'Em Treinamento' | 'Férias' | 'Folga' | 'Home Office';
+export type StatusMultiplicador = 'Disponível' | 'Em Treinamento' | 'Ausente' | 'Férias' | 'Folga' | 'Home Office';
 
 export type StatusSala = 'Livre' | 'Ocupada' | 'Manutenção';
 

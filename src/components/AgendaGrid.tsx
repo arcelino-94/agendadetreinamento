@@ -62,17 +62,20 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
   // Turmas do dia selecionado
   const turmasDoDia = turmas.filter(t => t.data === selectedDate && t.status !== 'Cancelado');
 
-  // Estilização dos blocos por Tipo de Treinamento
-  const getBadgeStyle = (tipo: TipoDemanda) => {
+  // Estilização dos blocos por Tipo de Treinamento e Prioridade
+  const getBadgeStyle = (tipo: TipoDemanda, priority?: string) => {
+    if (priority === 'Urgente') {
+      return 'bg-rose-600 text-white border-rose-700 shadow-xs font-semibold';
+    }
     switch (tipo) {
-      case 'Reciclagem':
-        return 'bg-indigo-600 text-white border-indigo-700 shadow-xs';
-      case 'Sinergia':
-        return 'bg-emerald-600 text-white border-emerald-700 shadow-xs';
-      case 'Alinhamento':
-        return 'bg-amber-600 text-white border-amber-700 shadow-xs';
       case 'Novatos':
-        return 'bg-violet-600 text-white border-violet-700 shadow-xs';
+        return 'bg-blue-600 text-white border-blue-700 shadow-xs';
+      case 'Reciclagem':
+        return 'bg-emerald-600 text-white border-emerald-700 shadow-xs';
+      case 'Sinergia':
+        return 'bg-amber-500 text-slate-950 border-amber-600 shadow-xs font-semibold';
+      case 'Alinhamento':
+        return 'bg-purple-600 text-white border-purple-700 shadow-xs';
       default:
         return 'bg-slate-700 text-white border-slate-800';
     }
@@ -164,17 +167,20 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
           
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-slate-400 font-medium">Legenda:</span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-600 text-white font-medium text-[11px]">
-              Reciclagem
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-600 text-white font-medium text-[11px]">
+              Novatos
             </span>
             <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-600 text-white font-medium text-[11px]">
+              Reciclagem
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-semibold text-[11px]">
               Sinergia
             </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-600 text-white font-medium text-[11px]">
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-purple-600 text-white font-medium text-[11px]">
               Alinhamento
             </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded bg-violet-600 text-white font-medium text-[11px]">
-              Novatos
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-rose-600 text-white font-medium text-[11px]">
+              Urgente
             </span>
           </div>
 

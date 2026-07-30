@@ -7,14 +7,20 @@ interface NovaTurmaModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialPreset?: {
+    editingTurmaId?: string;
     multiplicadorId?: string;
     salaId?: string;
     hour?: string;
+    data?: string;
     demandaIds?: string[];
     tema?: string;
     nomeTurma?: string;
     qtdParticipantes?: number;
     celulasNomes?: string[];
+    tipo?: TipoDemanda;
+    observacoes?: string;
+    horarioInicio?: string;
+    horarioFim?: string;
   } | null;
 }
 
@@ -28,11 +34,13 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
     salas, 
     demandas, 
     addTurma, 
+    updateTurma,
     selectedDate, 
     checkRoomConflict, 
     checkTrainerConflict 
   } = useApp();
 
+  const [editingTurmaId, setEditingTurmaId] = useState<string | null>(null);
   const [nomeTurma, setNomeTurma] = useState('');
   const [tema, setTema] = useState('');
   const [data, setData] = useState(selectedDate);
@@ -48,28 +56,37 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
   const [conflictError, setConflictError] = useState<string | null>(null);
 
   useEffect(() => {
-    setData(selectedDate);
-  }, [selectedDate]);
-
-  useEffect(() => {
     if (initialPreset) {
+      if (initialPreset.editingTurmaId) setEditingTurmaId(initialPreset.editingTurmaId);
+      else setEditingTurmaId(null);
+
       if (initialPreset.multiplicadorId) setMultiplicadorId(initialPreset.multiplicadorId);
       if (initialPreset.salaId) setSalaId(initialPreset.salaId);
-      if (initialPreset.hour) {
+      if (initialPreset.data) setData(initialPreset.data);
+      else setData(selectedDate);
+
+      if (initialPreset.horarioInicio) setHorarioInicio(initialPreset.horarioInicio);
+      else if (initialPreset.hour) {
         setHorarioInicio(initialPreset.hour);
         const startH = parseInt(initialPreset.hour.split(':')[0]);
         const endH = Math.min(23, startH + 2);
         setHorarioFim(`${endH < 10 ? '0' : ''}${endH}:00`);
       }
+
+      if (initialPreset.horarioFim) setHorarioFim(initialPreset.horarioFim);
       if (initialPreset.demandaIds) setSelectedDemandaIds(initialPreset.demandaIds);
       if (initialPreset.tema) setTema(initialPreset.tema);
       if (initialPreset.nomeTurma) setNomeTurma(initialPreset.nomeTurma);
       if (initialPreset.qtdParticipantes) setQtdParticipantes(initialPreset.qtdParticipantes);
+      if (initialPreset.tipo) setTipo(initialPreset.tipo);
+      if (initialPreset.observacoes) setObservacoes(initialPreset.observacoes);
     } else {
+      setEditingTurmaId(null);
+      setData(selectedDate);
       if (multiplicadores.length > 0) setMultiplicadorId(multiplicadores[0].id);
       if (salas.length > 0) setSalaId(salas[0].id);
     }
-  }, [initialPreset, multiplicadores, salas]);
+  }, [initialPreset, selectedDate, multiplicadores, salas]);
 
   // Efeito para Checagem de Conflito em Tempo Real
   useEffect(() => {
@@ -78,14 +95,14 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
       return;
     }
 
-    const conflitoSala = checkRoomConflict(salaId, data, horarioInicio, horarioFim);
+    const conflitoSala = checkRoomConflict(salaId, data, horarioInicio, horarioFim, editingTurmaId || undefined);
     if (conflitoSala) {
       const salaObj = salas.find(s => s.id === salaId);
       setConflictError(`CONFLITO DE SALA: A sala "${salaObj?.nome}" já está reservada para a turma "${conflitoSala.nomeTurma}" das ${conflitoSala.horarioInicio} às ${conflitoSala.horarioFim}. Escolha outra sala ou horário!`);
       return;
     }
 
-    const conflitoInstrutor = checkTrainerConflict(multiplicadorId, data, horarioInicio, horarioFim);
+    const conflitoInstrutor = checkTrainerConflict(multiplicadorId, data, horarioInicio, horarioFim, editingTurmaId || undefined);
     if (conflitoInstrutor) {
       const multObj = multiplicadores.find(m => m.id === multiplicadorId);
       setConflictError(`CONFLITO DE MULTIPLICADOR: O instrutor "${multObj?.nome}" já possui a turma "${conflitoInstrutor.nomeTurma}" agendada no horário das ${conflitoInstrutor.horarioInicio} às ${conflitoInstrutor.horarioFim}.`);
@@ -93,7 +110,7 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
     }
 
     setConflictError(null);
-  }, [salaId, multiplicadorId, data, horarioInicio, horarioFim, checkRoomConflict, checkTrainerConflict, salas, multiplicadores]);
+  }, [salaId, multiplicadorId, data, horarioInicio, horarioFim, checkRoomConflict, checkTrainerConflict, salas, multiplicadores, editingTurmaId]);
 
   if (!isOpen) return null;
 
@@ -107,32 +124,56 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
     const multObj = multiplicadores.find(m => m.id === multiplicadorId) || multiplicadores[0];
     const salaObj = salas.find(s => s.id === salaId) || salas[0];
 
-    // Buscar nomes das células das demandas selecionadas
     const demandasVinculadas = demandas.filter(d => selectedDemandaIds.includes(d.id));
     const celulasNomes = Array.from(new Set(demandasVinculadas.map(d => d.celulaNome)));
 
-    const result = addTurma({
-      nomeTurma: nomeTurma || `Turma: ${tema}`,
-      tema,
-      demandaIds: selectedDemandaIds,
-      multiplicadorId: multObj.id,
-      multiplicadorNome: multObj.nome,
-      salaId: salaObj.id,
-      salaNome: salaObj.nome,
-      data,
-      horarioInicio,
-      horarioFim,
-      qtdParticipantes,
-      celulasNomes: celulasNomes.length > 0 ? celulasNomes : ['Operação Call Center'],
-      status: 'Agendado',
-      tipo,
-      observacoes
-    });
+    if (editingTurmaId) {
+      const result = updateTurma(editingTurmaId, {
+        nomeTurma: nomeTurma || `Turma: ${tema}`,
+        tema,
+        demandaIds: selectedDemandaIds,
+        multiplicadorId: multObj.id,
+        multiplicadorNome: multObj.nome,
+        salaId: salaObj.id,
+        salaNome: salaObj.nome,
+        data,
+        horarioInicio,
+        horarioFim,
+        qtdParticipantes,
+        celulasNomes: celulasNomes.length > 0 ? celulasNomes : ['Operação Call Center'],
+        tipo,
+        observacoes
+      });
 
-    if (result.success) {
-      onClose();
+      if (result.success) {
+        onClose();
+      } else {
+        setConflictError(result.error || 'Erro ao atualizar turma');
+      }
     } else {
-      setConflictError(result.error || 'Erro ao salvar turma');
+      const result = addTurma({
+        nomeTurma: nomeTurma || `Turma: ${tema}`,
+        tema,
+        demandaIds: selectedDemandaIds,
+        multiplicadorId: multObj.id,
+        multiplicadorNome: multObj.nome,
+        salaId: salaObj.id,
+        salaNome: salaObj.nome,
+        data,
+        horarioInicio,
+        horarioFim,
+        qtdParticipantes,
+        celulasNomes: celulasNomes.length > 0 ? celulasNomes : ['Operação Call Center'],
+        status: 'Agendado',
+        tipo,
+        observacoes
+      });
+
+      if (result.success) {
+        onClose();
+      } else {
+        setConflictError(result.error || 'Erro ao salvar turma');
+      }
     }
   };
 
