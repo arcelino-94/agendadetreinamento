@@ -14,7 +14,7 @@ import {
 import { useApp } from '../context/AppContext';
 
 export const RelatoriosView: React.FC = () => {
-  const { demandas, turmas, multiplicadores, celulas } = useApp();
+  const { demandas, turmas, multiplicadores, celulas, tabulador } = useApp();
 
   const [filterCelula, setFilterCelula] = useState<string>('todas');
   const [filterMultiplicador, setFilterMultiplicador] = useState<string>('todos');
@@ -41,14 +41,38 @@ export const RelatoriosView: React.FC = () => {
       return acc + (end - start);
     }, 0);
 
+    // Cálculo Alinhamento / Reciclagem: duração do alinhamento * quantidade de operadores alinhados pelo multiplicador
+    let alinhamentoSec = 0;
+    const nameClean = m.nome.toLowerCase().trim();
+
+    tabulador.forEach(item => {
+      const chParts = (item.cargaHoraria || '0:20:00').split(':').map(p => parseInt(p, 10) || 0);
+      const chSeconds = (chParts[0] || 0) * 3600 + (chParts[1] || 0) * 60 + (chParts[2] || 0);
+
+      (item.operadores || []).forEach(op => {
+        if (op.statusPresenca === 'Presente') {
+          const opMulti = (op.multiplicador || '').toLowerCase().trim();
+          if (opMulti && (opMulti === nameClean || nameClean.includes(opMulti) || opMulti.includes(nameClean))) {
+            alinhamentoSec += chSeconds;
+          }
+        }
+      });
+    });
+
+    const hAlign = Math.floor(alinhamentoSec / 3600);
+    const mAlign = Math.floor((alinhamentoSec % 3600) / 60);
+    const alinhamentoFormatted = `${hAlign}h ${mAlign.toString().padStart(2, '0')}m`;
+
     return {
       id: m.id,
       nome: m.nome,
       qtdTurmas: turmasMult.length,
       horas,
+      alinhamentoHoras: alinhamentoFormatted,
+      alinhamentoSec,
       status: m.status
     };
-  }).sort((a, b) => b.horas - a.horas);
+  }).sort((a, b) => (b.horas + b.alinhamentoSec / 3600) - (a.horas + a.alinhamentoSec / 3600));
 
   // Treinamentos por Célula
   const treinamentosPorCelula = celulas.map(c => {
@@ -168,6 +192,7 @@ export const RelatoriosView: React.FC = () => {
                 <th className="p-3">Status Atual</th>
                 <th className="p-3">Turmas Ministradas</th>
                 <th className="p-3">Horas Acumuladas</th>
+                <th className="p-3 text-indigo-700 dark:text-indigo-300">Alinhamento/ Reciclagem</th>
                 <th className="p-3">Barra de Carga</th>
               </tr>
             </thead>
@@ -178,6 +203,7 @@ export const RelatoriosView: React.FC = () => {
                   <td className="p-3">{item.status}</td>
                   <td className="p-3 font-semibold">{item.qtdTurmas} turmas</td>
                   <td className="p-3 font-bold text-indigo-600 dark:text-indigo-400">{item.horas} horas</td>
+                  <td className="p-3 font-black text-amber-600 dark:text-amber-400">{item.alinhamentoHoras}</td>
                   <td className="p-3 w-48">
                     <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
                       <div 

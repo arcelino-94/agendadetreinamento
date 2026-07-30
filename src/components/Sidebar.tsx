@@ -9,6 +9,7 @@ import {
   Building2, 
   BarChart3,
   ClipboardList,
+  GraduationCap,
   Users,
   ShieldCheck,
   ChevronLeft,
@@ -93,6 +94,12 @@ export const Sidebar: React.FC = () => {
           {tabulador.length}
         </span>
       )
+    },
+    {
+      id: 'frequencias',
+      label: 'Frequências e Notas',
+      icon: GraduationCap,
+      badge: null
     },
     {
       id: 'quadro',

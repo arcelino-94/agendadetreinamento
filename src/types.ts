@@ -1,4 +1,4 @@
-export type TipoDemanda = 'Reciclagem' | 'Sinergia' | 'Alinhamento' | 'Novatos';
+export type TipoDemanda = 'Reciclagem' | 'Sinergia' | 'Alinhamento' | 'Novatos' | 'Migração';
 
 export type Prioridade = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
 
@@ -42,16 +42,19 @@ export interface Demanda {
   id: string;
   tipo: TipoDemanda;
   origem: string; // e.g. "E-mail Operacional", "Planejamento", "Supervisor"
-  supervisor: string;
-  gerente: string;
+  supervisor: string; // Solicitante / Área
+  gerente?: string;
   dataSolicitacao: string; // YYYY-MM-DD
   prazoLimite: string; // YYYY-MM-DD
   prioridade: Prioridade;
   tema: string;
   celulaId: string;
+  celulaIds?: string[]; // IDs de múltiplas células quando selecionadas
   celulaNome: string;
+  duracaoValor?: number;
+  duracaoUnidade?: 'minutos' | 'horas' | 'dias';
   qtdOperadores: number;
-  listaOperadores: string[]; // Lista de nomes ou matrículas
+  listaOperadores: string[]; // Lista de nomes ou matrículas (Logins C...)
   status: StatusDemanda;
   observacoes?: string;
   anexos?: string[];
@@ -118,7 +121,12 @@ export interface OperadorAlinhamento {
   gerente?: string;
   horarioEntrada?: string;
   segmento?: string;
+  dataPresenca?: string;
+  horario?: string;
+  multiplicador?: string;
+  local?: string;
   statusPresenca?: 'Presente' | 'Dispensado' | 'Pendente';
+  tipoAusencia?: string; // e.g., 'Atestado', 'Férias', 'ABS', 'TO', 'INSS', 'LMG'
 }
 
 export interface AlinhamentoTabulador {
@@ -137,6 +145,35 @@ export interface AlinhamentoTabulador {
   operadores: OperadorAlinhamento[];
   observacoes?: string;
   status: 'Pendente' | 'Concluído';
+  criadoEm: string;
+}
+
+export interface AlunoFrequenciaNota {
+  id: string;
+  matDP: string;
+  loginBB: string;
+  nome: string;
+  supervisor: string;
+  gerente: string;
+  celula: string;
+  frequenciaPercent: number;
+  notaFinal: number;
+  statusAprovacao: 'Aprovado' | 'Reprovado' | 'Em Andamento';
+  observacoes?: string;
+}
+
+export interface ItemFrequenciaNota {
+  id: string;
+  demandaId?: string;
+  treinamento: string;
+  tipo: 'Sinergia' | 'Migração' | 'Novatos';
+  celulas: string[];
+  dataInicio: string;
+  dataFim: string;
+  multiplicador: string;
+  cargaHoraria: string;
+  alunos: AlunoFrequenciaNota[];
+  status: 'Em Andamento' | 'Concluído';
   criadoEm: string;
 }
 

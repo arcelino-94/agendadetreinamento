@@ -18,12 +18,14 @@ import { getDeadlineAlerts } from '../lib/planningEngine';
 interface HeaderProps {
   onOpenNovaDemanda: () => void;
   onOpenNovaTurma: () => void;
+  onOpenReservarSala: () => void;
   onOpenFirebaseModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenNovaDemanda,
   onOpenNovaTurma,
+  onOpenReservarSala,
   onOpenFirebaseModal
 }) => {
   const { 
@@ -197,13 +199,13 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Nova Demanda</span>
             </button>
 
-            {/* Criar Turma Button */}
+            {/* Reservar Sala Button */}
             <button
-              onClick={onOpenNovaTurma}
+              onClick={onOpenReservarSala}
               className="flex items-center space-x-1.5 bg-indigo-500 hover:bg-indigo-400 text-white px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors shadow-2xs"
             >
               <Building2 className="w-3.5 h-3.5" />
-              <span>Agendar Turma</span>
+              <span>Reservar Sala</span>
             </button>
 
           </div>

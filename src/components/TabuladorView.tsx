@@ -1,7 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ClipboardList, 
-  Plus, 
   Search, 
   Clock, 
   Edit3, 
@@ -12,11 +11,12 @@ import {
   Calendar,
   CheckCircle,
   AlertCircle,
-  ArrowRight,
-  ArrowDown,
-  ChevronLeft,
-  ChevronRight,
-  FileSpreadsheet
+  FileSpreadsheet,
+  UserPlus,
+  Filter,
+  Printer,
+  ChevronDown,
+  RotateCcw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AlinhamentoTabulador, OperadorAlinhamento } from '../types';
@@ -36,14 +36,212 @@ function calculateHorasTreinamento(presentes: number, chString: string): string 
   return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+// Reusable Excel-style Multi-Select Checkbox Dropdown Filter Component
+interface ExcelMultiSelectFilterProps {
+  label: string;
+  options: string[];
+  selectedValues: string[]; // Empty array [] means ALL selected (no filter applied)
+  onChange: (newSelected: string[]) => void;
+  align?: 'left' | 'right';
+  className?: string;
+}
+
+const ExcelMultiSelectFilter: React.FC<ExcelMultiSelectFilterProps> = ({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  align = 'left',
+  className = ''
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Auto-close on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const isFiltered = selectedValues.length > 0 && !selectedValues.includes('__ALL__');
+  const isNoneSelected = selectedValues.length === 1 && selectedValues[0] === '__NONE__';
+
+  const visibleOptions = useMemo(() => {
+    if (!search.trim()) return options;
+    const q = search.toLowerCase().trim();
+    return options.filter(o => o.toLowerCase().includes(q));
+  }, [options, search]);
+
+  const handleToggleSelectAll = () => {
+    if (isFiltered || isNoneSelected) {
+      onChange([]); // select all
+    } else {
+      onChange(['__NONE__']); // unselect all
+    }
+  };
+
+  const handleToggleOption = (opt: string) => {
+    if (!isFiltered && !isNoneSelected) {
+      // Currently all options are selected. Unchecking this option means selecting all EXCEPT this option
+      const newSelected = options.filter(o => o !== opt);
+      onChange(newSelected);
+      return;
+    }
+
+    if (isNoneSelected) {
+      // Nothing was selected. Checking this option selects only this option
+      onChange([opt]);
+      return;
+    }
+
+    if (selectedValues.includes(opt)) {
+      // Remove option
+      const newSelected = selectedValues.filter(o => o !== opt);
+      if (newSelected.length === 0) {
+        onChange(['__NONE__']); // none selected
+      } else {
+        onChange(newSelected);
+      }
+    } else {
+      // Add option
+      const newSelected = [...selectedValues, opt];
+      if (newSelected.length >= options.length) {
+        onChange([]); // all selected
+      } else {
+        onChange(newSelected);
+      }
+    }
+  };
+
+  const handleClear = () => {
+    onChange([]);
+    setSearch('');
+  };
+
+  return (
+    <div className={`relative inline-block w-full ${className}`} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full text-left text-[10px] font-extrabold uppercase px-2 py-1.5 rounded flex items-center justify-between space-x-1 border transition-all ${
+          isFiltered || isNoneSelected
+            ? 'bg-amber-100 text-amber-950 border-amber-400 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-600 shadow-xs'
+            : 'bg-slate-800 text-slate-100 border-slate-700 hover:bg-slate-700'
+        }`}
+      >
+        <span className="truncate">{label}</span>
+        <div className="flex items-center space-x-1 shrink-0">
+          {(isFiltered || isNoneSelected) && (
+            <span className="bg-amber-500 text-slate-950 px-1 py-0.2 rounded text-[9px] font-black">
+              {isNoneSelected ? 0 : selectedValues.length}
+            </span>
+          )}
+          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''} ${isFiltered || isNoneSelected ? 'text-amber-600 dark:text-amber-300' : 'text-slate-300'}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-64 bg-white dark:bg-slate-900 border-2 border-indigo-600 dark:border-indigo-500 rounded-xl shadow-2xl p-2.5 text-slate-900 dark:text-white text-xs space-y-2`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black">
+            <span className="text-indigo-900 dark:text-indigo-300 flex items-center space-x-1">
+              <Filter className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Filtrar {label}</span>
+            </span>
+            {(isFiltered || isNoneSelected) && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-amber-600 hover:underline text-[10px] font-bold"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+
+          {/* Search inside Dropdown */}
+          <div className="relative">
+            <Search className="w-3 h-3 absolute left-2 top-2 text-slate-400" />
+            <input
+              type="text"
+              placeholder={`Pesquisar ${label}...`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full text-[11px] pl-7 pr-2 py-1 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Options with Checkboxes */}
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1 font-medium text-[11px]">
+            <label className="flex items-center space-x-2 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer font-bold border-b border-slate-100 dark:border-slate-800">
+              <input
+                type="checkbox"
+                checked={!isFiltered && !isNoneSelected}
+                onChange={handleToggleSelectAll}
+                className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+              />
+              <span>(Selecionar Tudo)</span>
+            </label>
+
+            {visibleOptions.map((opt) => {
+              const isChecked = (!isFiltered && !isNoneSelected) || selectedValues.includes(opt);
+              return (
+                <label
+                  key={opt}
+                  className="flex items-center space-x-2 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer truncate"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => handleToggleOption(opt)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                  />
+                  <span className="truncate">{opt}</span>
+                </label>
+              );
+            })}
+
+            {visibleOptions.length === 0 && (
+              <p className="p-2 text-slate-400 italic text-center text-[10px]">
+                Nenhuma opção encontrada
+              </p>
+            )}
+          </div>
+
+          {/* Close Footer */}
+          <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-[10px] shadow-xs"
+            >
+              OK / Fechar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const TabuladorView: React.FC = () => {
   const { 
     tabulador, 
     addAlinhamentoTabulador, 
     updateAlinhamentoTabulador,
     deleteAlinhamentoTabulador, 
-    toggleAlinhamentoStatus,
     celulas,
+    multiplicadores,
+    operadores,
     getOperadorByLogin
   } = useApp();
 
@@ -54,14 +252,20 @@ export const TabuladorView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCelula, setSelectedCelula] = useState('todos');
 
+  // Main Tabulador Table Column Multi-Select Filters
+  const [tabFilterTreinamento, setTabFilterTreinamento] = useState<string[]>([]);
+  const [tabFilterSolicitante, setTabFilterSolicitante] = useState<string[]>([]);
+  const [tabFilterCelula, setTabFilterCelula] = useState<string[]>([]);
+  const [tabFilterStatus, setTabFilterStatus] = useState<string[]>([]);
+
   // Helper to parse item date into 'mon/yy' string
   const getDateMonthKey = (dateStr?: string): string => {
     if (!dateStr) return 'jul/26';
     if (dateStr.includes('/')) return dateStr.toLowerCase();
     const parts = dateStr.split('-');
     if (parts.length >= 2) {
-      const yearStr = parts[0].slice(-2); // '26'
-      const monthIdx = parseInt(parts[1], 10) - 1; // 0..11
+      const yearStr = parts[0].slice(-2);
+      const monthIdx = parseInt(parts[1], 10) - 1;
       const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
       if (monthIdx >= 0 && monthIdx < 12) {
         return `${monthNames[monthIdx]}/${yearStr}`;
@@ -88,21 +292,59 @@ export const TabuladorView: React.FC = () => {
     status: 'Concluído' as 'Pendente' | 'Concluído'
   });
 
-  // Operators attendance detail modal
-  const [selectedDetailItem, setSelectedDetailItem] = useState<AlinhamentoTabulador | null>(null);
-  const [opInputLogin, setOpInputLogin] = useState('');
-  const [opLookupError, setOpLookupError] = useState<string | null>(null);
+  // Modal 1: Dedicated Full Alignment Details Table View
+  const [viewingFullAlignment, setViewingFullAlignment] = useState<AlinhamentoTabulador | null>(null);
+
+  // Excel-style Multi-Select Checkbox Column Filters inside viewingFullAlignment
+  const [colFilterLogin, setColFilterLogin] = useState<string[]>([]);
+  const [colFilterNome, setColFilterNome] = useState<string[]>([]);
+  const [colFilterSupervisor, setColFilterSupervisor] = useState<string[]>([]);
+  const [colFilterGerente, setColFilterGerente] = useState<string[]>([]);
+  const [colFilterSegmento, setColFilterSegmento] = useState<string[]>([]);
+  const [colFilterMultiplicador, setColFilterMultiplicador] = useState<string[]>([]);
+  const [colFilterLocal, setColFilterLocal] = useState<string[]>([]);
+  const [colFilterStatus, setColFilterStatus] = useState<string[]>([]);
+
+  // Reset alignment column filters when opening a new alignment
+  useEffect(() => {
+    if (viewingFullAlignment) {
+      setColFilterLogin([]);
+      setColFilterNome([]);
+      setColFilterSupervisor([]);
+      setColFilterGerente([]);
+      setColFilterSegmento([]);
+      setColFilterMultiplicador([]);
+      setColFilterLocal([]);
+      setColFilterStatus([]);
+    }
+  }, [viewingFullAlignment?.id]);
+
+  // Modal 2: Bulk Include Operators ("Incluir em Massa") Modal
+  const [bulkIncludeItem, setBulkIncludeItem] = useState<AlinhamentoTabulador | null>(null);
+  const [bulkLoginsText, setBulkLoginsText] = useState('');
+  const [bulkData, setBulkData] = useState(new Date().toISOString().split('T')[0]);
+  const [bulkMultiplicador, setBulkMultiplicador] = useState(multiplicadores[0]?.nome || 'JOSE LEANDRO');
+  const [bulkHora, setBulkHora] = useState('09:00');
+  const [bulkLocal, setBulkLocal] = useState('Ilha Operacional');
+  const [bulkStatus, setBulkStatus] = useState<'Presente' | 'Pendente' | 'Dispensado'>('Presente');
+  const [bulkTipoAusencia, setBulkTipoAusencia] = useState('');
 
   // Delete Password Confirmation Modal
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Computed metrics
+  // Options for Main Tabulador Table Filters
+  const optionsTabTreinamento = useMemo(() => Array.from(new Set(tabulador.map(t => t.treinamento).filter(Boolean))).sort(), [tabulador]);
+  const optionsTabSolicitante = useMemo(() => Array.from(new Set(tabulador.map(t => t.solicitante || 'OPERAÇÃO / T&D/BB'))).sort(), [tabulador]);
+  const optionsTabCelula = useMemo(() => Array.from(new Set(tabulador.map(t => t.celula).filter(Boolean))).sort(), [tabulador]);
+  const optionsTabStatus = useMemo(() => Array.from(new Set(tabulador.map(t => t.status || 'Concluído'))).sort(), [tabulador]);
+
+  // Computed filtered Tabulador list
   const filteredTabulador = useMemo(() => {
     return tabulador.filter(item => {
       const q = searchTerm.toLowerCase().trim();
-      const treinamentoStr = (item.treinamento || (item as any).titulo || '').toLowerCase();
+      const treinamentoStr = (item.treinamento || '').toLowerCase();
       const solicitanteStr = (item.solicitante || '').toLowerCase();
-      const celulaStr = (item.celula || (item as any).segmento || '').toLowerCase();
+      const celulaStr = (item.celula || '').toLowerCase();
 
       const matchSearch = 
         treinamentoStr.includes(q) ||
@@ -110,14 +352,97 @@ export const TabuladorView: React.FC = () => {
         celulaStr.includes(q);
 
       const matchCelula = selectedCelula === 'todos' || celulaStr.includes(selectedCelula.toLowerCase());
-
       const itemMonthKey = getDateMonthKey(item.data);
       const matchMonth = selectedMonth === 'todos' || itemMonthKey === selectedMonth.toLowerCase() || (item.data && item.data.toLowerCase().includes(selectedMonth.toLowerCase()));
 
-      return matchSearch && matchCelula && matchMonth;
-    });
-  }, [tabulador, searchTerm, selectedCelula, selectedMonth]);
+      const matchTabTrein = tabFilterTreinamento.length === 0 || tabFilterTreinamento.includes(item.treinamento);
+      const matchTabSolic = tabFilterSolicitante.length === 0 || tabFilterSolicitante.includes(item.solicitante || 'OPERAÇÃO / T&D/BB');
+      const matchTabCel = tabFilterCelula.length === 0 || tabFilterCelula.includes(item.celula);
+      const matchTabStat = tabFilterStatus.length === 0 || tabFilterStatus.includes(item.status);
 
+      return matchSearch && matchCelula && matchMonth && matchTabTrein && matchTabSolic && matchTabCel && matchTabStat;
+    });
+  }, [
+    tabulador, 
+    searchTerm, 
+    selectedCelula, 
+    selectedMonth, 
+    tabFilterTreinamento, 
+    tabFilterSolicitante, 
+    tabFilterCelula, 
+    tabFilterStatus
+  ]);
+
+  // Options for Viewing Operators Modal
+  const opList = useMemo(() => viewingFullAlignment?.operadores || [], [viewingFullAlignment]);
+
+  const optionsLogin = useMemo(() => Array.from(new Set(opList.map(o => o.loginBB).filter(Boolean))).sort(), [opList]);
+  const optionsNome = useMemo(() => Array.from(new Set(opList.map(o => o.nome).filter(Boolean))).sort(), [opList]);
+  const optionsSupervisor = useMemo(() => Array.from(new Set(opList.map(o => o.supervisor || 'N/A'))).sort(), [opList]);
+  const optionsGerente = useMemo(() => Array.from(new Set(opList.map(o => o.gerente || 'N/A'))).sort(), [opList]);
+  const optionsSegmento = useMemo(() => Array.from(new Set(opList.map(o => o.segmento || viewingFullAlignment?.celula || 'N/A'))).sort(), [opList, viewingFullAlignment]);
+  const optionsMultiplicador = useMemo(() => Array.from(new Set(opList.map(o => o.multiplicador || 'T&D/BB'))).sort(), [opList]);
+  const optionsLocal = useMemo(() => Array.from(new Set(opList.map(o => o.local || 'Ilha Operacional'))).sort(), [opList]);
+
+  // Collected Status Options including standard statuses and custom absence types (Atestado, Férias, etc.)
+  const optionsStatus = useMemo(() => {
+    const set = new Set<string>();
+    opList.forEach(o => {
+      if (o.statusPresenca) set.add(o.statusPresenca);
+      if (o.tipoAusencia) set.add(o.tipoAusencia);
+    });
+    ['Presente', 'Pendente', 'Dispensado', 'Atestado', 'Férias', 'ABS', 'TO', 'INSS', 'LMG'].forEach(s => set.add(s));
+    return Array.from(set).sort();
+  }, [opList]);
+
+  // Filtered operators for Full Alignment View (Supporting Excel Multi-Select Checkboxes)
+  const filteredAlignmentOperators = useMemo(() => {
+    if (!viewingFullAlignment) return [];
+    return (viewingFullAlignment.operadores || []).filter(op => {
+      const opLogin = op.loginBB || '';
+      const opNome = op.nome || '';
+      const opSup = op.supervisor || 'N/A';
+      const opGer = op.gerente || 'N/A';
+      const opSeg = op.segmento || viewingFullAlignment.celula || 'N/A';
+      const opMulti = op.multiplicador || 'T&D/BB';
+      const opLocal = op.local || 'Ilha Operacional';
+      const opStatus = op.statusPresenca || 'Presente';
+      const opAusencia = op.tipoAusencia || '';
+
+      const matchLogin = colFilterLogin.length === 0 || colFilterLogin.includes('__NONE__') ? colFilterLogin.length === 0 : colFilterLogin.includes(opLogin) || colFilterLogin.includes(op.matDP || '');
+      const matchNome = colFilterNome.length === 0 || colFilterNome.includes('__NONE__') ? colFilterNome.length === 0 : colFilterNome.includes(opNome);
+      const matchSup = colFilterSupervisor.length === 0 || colFilterSupervisor.includes('__NONE__') ? colFilterSupervisor.length === 0 : colFilterSupervisor.includes(opSup);
+      const matchGer = colFilterGerente.length === 0 || colFilterGerente.includes('__NONE__') ? colFilterGerente.length === 0 : colFilterGerente.includes(opGer);
+      const matchSeg = colFilterSegmento.length === 0 || colFilterSegmento.includes('__NONE__') ? colFilterSegmento.length === 0 : colFilterSegmento.includes(opSeg);
+      const matchMulti = colFilterMultiplicador.length === 0 || colFilterMultiplicador.includes('__NONE__') ? colFilterMultiplicador.length === 0 : colFilterMultiplicador.includes(opMulti);
+      const matchLocal = colFilterLocal.length === 0 || colFilterLocal.includes('__NONE__') ? colFilterLocal.length === 0 : colFilterLocal.includes(opLocal);
+
+      let matchStatus = true;
+      if (colFilterStatus.length > 0) {
+        if (colFilterStatus.includes('__NONE__')) {
+          matchStatus = false;
+        } else {
+          matchStatus = 
+            colFilterStatus.includes(opStatus) ||
+            (opAusencia !== '' && colFilterStatus.includes(opAusencia));
+        }
+      }
+
+      return matchLogin && matchNome && matchSup && matchGer && matchSeg && matchMulti && matchLocal && matchStatus;
+    });
+  }, [
+    viewingFullAlignment, 
+    colFilterLogin, 
+    colFilterNome, 
+    colFilterSupervisor, 
+    colFilterGerente, 
+    colFilterSegmento, 
+    colFilterMultiplicador, 
+    colFilterLocal, 
+    colFilterStatus
+  ]);
+
+  // Overall metrics
   const totalConvocados = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.convocados || 0), 0), [filteredTabulador]);
   const totalPresentes = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.presentes || 0), 0), [filteredTabulador]);
   const totalDispensado = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.dispensado || 0), 0), [filteredTabulador]);
@@ -127,7 +452,7 @@ export const TabuladorView: React.FC = () => {
     return Math.round((totalPresentes / totalConvocados) * 100);
   }, [totalConvocados, totalPresentes]);
 
-  // Open Add/Edit Modal
+  // Handle Edit/Save Form
   const handleOpenModal = (item?: AlinhamentoTabulador) => {
     if (item) {
       setEditingItem(item);
@@ -210,115 +535,113 @@ export const TabuladorView: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  // Add operator by Login BB into detail drawer
-  const handleAddOperatorToDetail = () => {
-    if (!selectedDetailItem || !opInputLogin.trim()) return;
-    const op = getOperadorByLogin(opInputLogin);
-    if (!op) {
-      setOpLookupError(`Login "${opInputLogin}" não foi encontrado no Quadro de Operadores!`);
-      return;
-    }
-
-    const currentOps = selectedDetailItem.operadores || [];
-    if (currentOps.some(o => o.loginBB.toUpperCase() === op.loginBB.toUpperCase())) {
-      setOpLookupError(`O operador ${op.nome} já está nesta lista.`);
-      return;
-    }
-
-    const newOp: OperadorAlinhamento = {
-      loginBB: op.loginBB,
-      nome: op.nome,
-      matDP: op.matDP,
-      supervisor: op.supervisor,
-      gerente: op.gerente,
-      segmento: op.segmento,
-      statusPresenca: 'Presente'
-    };
-
-    const updatedOps = [...currentOps, newOp];
-    const newConvocados = updatedOps.length;
-    const newPresentes = updatedOps.filter(o => o.statusPresenca === 'Presente').length;
-    const newDispensado = updatedOps.filter(o => o.statusPresenca === 'Dispensado').length;
-    const newPendentes = Math.max(0, newConvocados - newPresentes - newDispensado);
-    const newPercentual = newConvocados > 0 ? Math.round((newPresentes / newConvocados) * 100) : 0;
-    const newHoras = calculateHorasTreinamento(newPresentes, selectedDetailItem.cargaHoraria);
-
-    const updates = {
-      operadores: updatedOps,
-      convocados: newConvocados,
-      presentes: newPresentes,
-      dispensado: newDispensado,
-      pendentes: newPendentes,
-      percentual: newPercentual,
-      horasTreinamento: newHoras
-    };
-
-    updateAlinhamentoTabulador(selectedDetailItem.id, updates);
-    setSelectedDetailItem({ ...selectedDetailItem, ...updates });
-    setOpInputLogin('');
-    setOpLookupError(null);
+  // Bulk Add Operators ("Incluir em Massa")
+  const handleOpenBulkInclude = (item: AlinhamentoTabulador) => {
+    setBulkIncludeItem(item);
+    setBulkLoginsText('');
+    setBulkData(item.data || new Date().toISOString().split('T')[0]);
+    setBulkMultiplicador(multiplicadores[0]?.nome || 'MARIA CLARA');
+    setBulkHora('09:00');
+    setBulkLocal('Ilha Operacional');
+    setBulkStatus('Presente');
+    setBulkTipoAusencia('');
   };
 
-  const handleToggleOperatorPresence = (loginBB: string, newStatus: 'Presente' | 'Dispensado' | 'Pendente') => {
-    if (!selectedDetailItem) return;
-    const updatedOps = selectedDetailItem.operadores.map(op => {
-      if (op.loginBB === loginBB) return { ...op, statusPresenca: newStatus };
-      return op;
+  const handleExecuteBulkInclude = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkIncludeItem || !bulkLoginsText.trim()) return;
+
+    const logins = bulkLoginsText
+      .split(/[\s,;\n]+/)
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean);
+
+    const existingOps = bulkIncludeItem.operadores || [];
+    const newOps: OperadorAlinhamento[] = [...existingOps];
+
+    logins.forEach(login => {
+      const opQuadro = getOperadorByLogin(login);
+      // Remove existing entry for same login if updating
+      const index = newOps.findIndex(o => o.loginBB.toUpperCase() === login);
+      
+      const newOpEntry: OperadorAlinhamento = {
+        loginBB: login,
+        nome: opQuadro ? opQuadro.nome : `OPERADOR ${login}`,
+        matDP: opQuadro ? opQuadro.matDP : 'N/A',
+        supervisor: opQuadro ? opQuadro.supervisor : 'N/A',
+        gerente: opQuadro ? opQuadro.gerente : 'N/A',
+        segmento: opQuadro ? opQuadro.segmento : bulkIncludeItem.celula,
+        dataPresenca: bulkData,
+        horario: bulkHora,
+        multiplicador: bulkMultiplicador,
+        local: bulkLocal,
+        statusPresenca: bulkStatus,
+        tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
+      };
+
+      if (index >= 0) {
+        newOps[index] = newOpEntry;
+      } else {
+        newOps.push(newOpEntry);
+      }
     });
 
-    const newConvocados = updatedOps.length;
-    const newPresentes = updatedOps.filter(o => o.statusPresenca === 'Presente').length;
-    const newDispensado = updatedOps.filter(o => o.statusPresenca === 'Dispensado').length;
+    const newConvocados = newOps.length;
+    const newPresentes = newOps.filter(o => o.statusPresenca === 'Presente').length;
+    const newDispensado = newOps.filter(o => o.statusPresenca === 'Dispensado').length;
     const newPendentes = Math.max(0, newConvocados - newPresentes - newDispensado);
     const newPercentual = newConvocados > 0 ? Math.round((newPresentes / newConvocados) * 100) : 0;
-    const newHoras = calculateHorasTreinamento(newPresentes, selectedDetailItem.cargaHoraria);
+    const newHoras = calculateHorasTreinamento(newPresentes, bulkIncludeItem.cargaHoraria);
 
-    const updates = {
-      operadores: updatedOps,
+    updateAlinhamentoTabulador(bulkIncludeItem.id, {
+      operadores: newOps,
       convocados: newConvocados,
       presentes: newPresentes,
       dispensado: newDispensado,
       pendentes: newPendentes,
       percentual: newPercentual,
       horasTreinamento: newHoras
-    };
+    });
 
-    updateAlinhamentoTabulador(selectedDetailItem.id, updates);
-    setSelectedDetailItem({ ...selectedDetailItem, ...updates });
+    setBulkIncludeItem(null);
   };
 
-  const handleRemoveOperatorFromDetail = (loginBB: string) => {
-    if (!selectedDetailItem) return;
-    const updatedOps = selectedDetailItem.operadores.filter(op => op.loginBB !== loginBB);
+  // Export CSV for single alignment operators
+  const handleExportAlignmentCSV = () => {
+    if (!viewingFullAlignment) return;
+    const headers = ['MAT_DP', 'LOGIN_BB', 'NOME', 'SUPERVISOR', 'GERENTE', 'CELULA', 'DATA', 'HORA', 'MULTIPLICADOR', 'LOCAL', 'STATUS', 'MOTIVO_AUSENCIA'];
+    const rows = filteredAlignmentOperators.map(op => [
+      `"${op.matDP || 'N/A'}"`,
+      `"${op.loginBB}"`,
+      `"${op.nome.replace(/"/g, '""')}"`,
+      `"${(op.supervisor || '').replace(/"/g, '""')}"`,
+      `"${(op.gerente || '').replace(/"/g, '""')}"`,
+      `"${(op.segmento || '').replace(/"/g, '""')}"`,
+      `"${op.dataPresenca || viewingFullAlignment.data}"`,
+      `"${op.horario || 'N/A'}"`,
+      `"${(op.multiplicador || 'T&D/BB').replace(/"/g, '""')}"`,
+      `"${(op.local || 'Ilha').replace(/"/g, '""')}"`,
+      `"${op.statusPresenca || 'Presente'}"`,
+      `"${(op.tipoAusencia || '').replace(/"/g, '""')}"`
+    ]);
 
-    const newConvocados = updatedOps.length;
-    const newPresentes = updatedOps.filter(o => o.statusPresenca === 'Presente').length;
-    const newDispensado = updatedOps.filter(o => o.statusPresenca === 'Dispensado').length;
-    const newPendentes = Math.max(0, newConvocados - newPresentes - newDispensado);
-    const newPercentual = newConvocados > 0 ? Math.round((newPresentes / newConvocados) * 100) : 0;
-    const newHoras = calculateHorasTreinamento(newPresentes, selectedDetailItem.cargaHoraria);
-
-    const updates = {
-      operadores: updatedOps,
-      convocados: newConvocados,
-      presentes: newPresentes,
-      dispensado: newDispensado,
-      pendentes: newPendentes,
-      percentual: newPercentual,
-      horasTreinamento: newHoras
-    };
-
-    updateAlinhamentoTabulador(selectedDetailItem.id, updates);
-    setSelectedDetailItem({ ...selectedDetailItem, ...updates });
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Alinhamento_${viewingFullAlignment.treinamento.replace(/\s+/g, '_')}_Operadores.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  // Export to CSV
-  const handleExportCSV = () => {
+  // Export CSV for whole Tabulador
+  const handleExportTabuladorCSV = () => {
     const headers = ['TREINAMENTO', 'SOLICITANTE', 'CELULA', 'CONVOCADOS', 'PRESENTES', 'DISPENSADO', 'PENDENTES', 'HORAS TREIN.', 'CH', '% ADERÊNCIA'];
     const rows = filteredTabulador.map(t => [
-      `"${(t.treinamento || (t as any).titulo || '').replace(/"/g, '""')}"`,
+      `"${(t.treinamento || '').replace(/"/g, '""')}"`,
       `"${(t.solicitante || 'OPERAÇÃO / T&D/BB').replace(/"/g, '""')}"`,
-      `"${(t.celula || (t as any).segmento || '').replace(/"/g, '""')}"`,
+      `"${(t.celula || '').replace(/"/g, '""')}"`,
       t.convocados || 0,
       t.presentes || 0,
       t.dispensado || 0,
@@ -338,23 +661,22 @@ export const TabuladorView: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Helper status icon renderer matching image
   const renderPercentIcon = (pct: number) => {
     if (pct >= 80) {
       return (
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-2xs" title="100% Aderência / Alta Conclusão">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-2xs">
           ✓
         </span>
       );
     } else if (pct >= 50) {
       return (
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold shadow-2xs" title="Aderência Média">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold shadow-2xs">
           ➔
         </span>
       );
     } else {
       return (
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-2xs" title="Baixa Aderência">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-2xs">
           ▼
         </span>
       );
@@ -458,7 +780,7 @@ export const TabuladorView: React.FC = () => {
 
         <div className="flex items-center space-x-2 w-full sm:w-auto shrink-0">
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportTabuladorCSV}
             className="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-3.5 py-1.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors"
             title="Exportar dados do Tabulador para Excel / CSV"
           >
@@ -468,15 +790,36 @@ export const TabuladorView: React.FC = () => {
         </div>
       </div>
 
-      {/* SPREADSHEET TABLE (EXACT MATCH TO USER IMAGE COLUMNS & DESIGN) */}
+      {/* SPREADSHEET TABLE */}
       <div className="bg-white dark:bg-slate-900 border-2 border-indigo-900 dark:border-indigo-800 rounded-xl shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse font-sans text-xs">
             <thead>
               <tr className="bg-indigo-900 dark:bg-slate-950 text-white text-[11px] font-black uppercase tracking-wider border-b-2 border-yellow-400">
-                <th className="px-3 py-3 w-80 border-r border-indigo-800/80">TREINAMENTO</th>
-                <th className="px-3 py-3 w-44 border-r border-indigo-800/80">SOLICITANTE</th>
-                <th className="px-3 py-3 w-48 border-r border-indigo-800/80">CELULA</th>
+                <th className="px-2 py-2 w-80 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Treinamento"
+                    options={optionsTabTreinamento}
+                    selectedValues={tabFilterTreinamento}
+                    onChange={setTabFilterTreinamento}
+                  />
+                </th>
+                <th className="px-2 py-2 w-44 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Solicitante"
+                    options={optionsTabSolicitante}
+                    selectedValues={tabFilterSolicitante}
+                    onChange={setTabFilterSolicitante}
+                  />
+                </th>
+                <th className="px-2 py-2 w-48 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Célula"
+                    options={optionsTabCelula}
+                    selectedValues={tabFilterCelula}
+                    onChange={setTabFilterCelula}
+                  />
+                </th>
                 <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">CONVOCADOS</th>
                 <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">PRESENTES</th>
                 <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">DISPENSADO</th>
@@ -484,7 +827,7 @@ export const TabuladorView: React.FC = () => {
                 <th className="px-3 py-3 text-center w-28 border-r border-indigo-800/80">HORAS TREIN.</th>
                 <th className="px-2.5 py-3 text-center w-20 border-r border-indigo-800/80">CH</th>
                 <th className="px-2 py-3 text-center w-20 border-r border-indigo-800/80">%</th>
-                <th className="px-3 py-3 text-center w-24">AÇÕES</th>
+                <th className="px-3 py-3 text-center w-28">INCLUIR EM MASSA / AÇÕES</th>
               </tr>
             </thead>
 
@@ -505,12 +848,16 @@ export const TabuladorView: React.FC = () => {
                       key={item.id} 
                       className={`${rowBg} hover:bg-indigo-50/50 dark:hover:bg-slate-800/80 transition-colors border-b border-slate-200/80 dark:border-slate-800`}
                     >
-                      {/* TREINAMENTO */}
-                      <td className="px-3 py-2.5 font-bold text-indigo-950 dark:text-indigo-200 border-r border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center space-x-2">
-                          <span className="w-1.5 h-6 bg-indigo-600 rounded-full shrink-0"></span>
-                          <span className="line-clamp-2 uppercase">{item.treinamento}</span>
-                        </div>
+                      {/* TREINAMENTO - CLICKABLE TO OPEN DEDICATED FULL TABLE */}
+                      <td className="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-800">
+                        <button
+                          onClick={() => setViewingFullAlignment(item)}
+                          className="flex items-center space-x-2 text-left text-indigo-900 dark:text-indigo-200 hover:text-indigo-600 dark:hover:text-indigo-400 group transition-colors"
+                          title="Clique para abrir a Tabela Completa de Operadores com Filtros Excel"
+                        >
+                          <span className="w-1.5 h-6 bg-indigo-600 group-hover:bg-amber-500 rounded-full shrink-0 transition-colors"></span>
+                          <span className="line-clamp-2 uppercase group-hover:underline font-extrabold">{item.treinamento}</span>
+                        </button>
                       </td>
 
                       {/* SOLICITANTE */}
@@ -565,16 +912,18 @@ export const TabuladorView: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* AÇÕES */}
+                      {/* AÇÕES (INCLUIR EM MASSA BUTTON) */}
                       <td className="px-2 py-2.5 text-center">
                         <div className="flex items-center justify-center space-x-1">
                           <button
-                            onClick={() => setSelectedDetailItem(item)}
-                            className="p-1 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"
-                            title="Ver Operadores / Lista de Presença"
+                            onClick={() => handleOpenBulkInclude(item)}
+                            className="flex items-center space-x-1 px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold shadow-2xs transition-colors"
+                            title="Incluir Operadores em Massa neste Alinhamento"
                           >
-                            <Users className="w-3.5 h-3.5" />
+                            <UserPlus className="w-3 h-3" />
+                            <span>Incluir</span>
                           </button>
+
                           <button
                             onClick={() => handleOpenModal(item)}
                             className="p-1 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 rounded transition-colors"
@@ -600,7 +949,395 @@ export const TabuladorView: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL CADASTRAR / EDITAR TREINAMENTO */}
+      {/* DEDICATED FULL TABLE MODAL FOR SINGLE ALIGNMENT (CLICKING TITLE) */}
+      {viewingFullAlignment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-3 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[94vh] flex flex-col overflow-hidden">
+            
+            {/* MODAL HEADER */}
+            <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-400 text-indigo-950 uppercase">
+                    {viewingFullAlignment.celula}
+                  </span>
+                  <span className="text-xs text-indigo-200 font-mono">CH: {viewingFullAlignment.cargaHoraria}</span>
+                </div>
+                <h2 className="text-lg font-black tracking-tight mt-1 uppercase">
+                  {viewingFullAlignment.treinamento}
+                </h2>
+                <p className="text-xs text-indigo-200 mt-0.5">
+                  Solicitante: <strong>{viewingFullAlignment.solicitante}</strong> | Horas Totais em Cabeça: <strong>{viewingFullAlignment.horasTreinamento}</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2 self-end sm:self-center">
+                <button
+                  onClick={handleExportAlignmentCSV}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors border border-white/20"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Exportar Lista (CSV)</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors border border-white/20"
+                >
+                  <Printer className="w-3.5 h-3.5 text-indigo-200" />
+                  <span>Imprimir</span>
+                </button>
+
+                <button
+                  onClick={() => setViewingFullAlignment(null)}
+                  className="p-1.5 text-slate-300 hover:text-white rounded-lg"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* METRICS STRIP */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-100 dark:bg-slate-800/80 p-3 text-center border-b border-slate-200 dark:border-slate-800 shrink-0 text-xs">
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase">Convocados</span>
+                <span className="text-base font-black text-slate-900 dark:text-white">{viewingFullAlignment.convocados}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-emerald-600 uppercase">Presentes</span>
+                <span className="text-base font-black text-emerald-600">{viewingFullAlignment.presentes}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-slate-500 uppercase">Dispensados</span>
+                <span className="text-base font-black text-slate-600 dark:text-slate-300">{viewingFullAlignment.dispensado}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-amber-600 uppercase">Pendentes</span>
+                <span className="text-base font-black text-amber-600">{viewingFullAlignment.pendentes}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-indigo-600 uppercase">% Aderência</span>
+                <span className="text-base font-black text-indigo-600">{viewingFullAlignment.percentual}%</span>
+              </div>
+            </div>
+
+            {/* EXCEL-STYLE DEDICATED TABLE WITH HEADER FILTERS */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-3">
+              <div className="border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase border-b border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                        <ExcelMultiSelectFilter
+                          label="MAT DP / LOGIN"
+                          options={optionsLogin}
+                          selectedValues={colFilterLogin}
+                          onChange={setColFilterLogin}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700 min-w-48">
+                        <ExcelMultiSelectFilter
+                          label="NOME OPERADOR"
+                          options={optionsNome}
+                          selectedValues={colFilterNome}
+                          onChange={setColFilterNome}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                        <ExcelMultiSelectFilter
+                          label="SUPERVISOR"
+                          options={optionsSupervisor}
+                          selectedValues={colFilterSupervisor}
+                          onChange={setColFilterSupervisor}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                        <ExcelMultiSelectFilter
+                          label="GERENTE"
+                          options={optionsGerente}
+                          selectedValues={colFilterGerente}
+                          onChange={setColFilterGerente}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700 min-w-32">
+                        <ExcelMultiSelectFilter
+                          label="SEGMENTO"
+                          options={optionsSegmento}
+                          selectedValues={colFilterSegmento}
+                          onChange={setColFilterSegmento}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                        <ExcelMultiSelectFilter
+                          label="MULTIPLICADOR"
+                          options={optionsMultiplicador}
+                          selectedValues={colFilterMultiplicador}
+                          onChange={setColFilterMultiplicador}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700 min-w-28">
+                        <ExcelMultiSelectFilter
+                          label="LOCAL"
+                          options={optionsLocal}
+                          selectedValues={colFilterLocal}
+                          onChange={setColFilterLocal}
+                        />
+                      </th>
+                      <th className="p-2 border-r border-slate-700 min-w-24 text-center text-slate-300 font-extrabold uppercase">DATA / HORA</th>
+                      <th className="p-1.5 min-w-36 text-center">
+                        <ExcelMultiSelectFilter
+                          label="STATUS PRESENÇA"
+                          options={optionsStatus}
+                          selectedValues={colFilterStatus}
+                          onChange={setColFilterStatus}
+                          align="right"
+                        />
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
+                    {filteredAlignmentOperators.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center text-slate-400 italic">
+                          Nenhum operador corresponde aos filtros aplicados nesta consulta.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredAlignmentOperators.map((op, idx) => (
+                        <tr key={`${op.loginBB}-${idx}`} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60">
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                            {op.loginBB} <span className="text-[10px] text-slate-400 font-normal">({op.matDP || 'N/A'})</span>
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white">
+                            {op.nome}
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                            {op.supervisor || 'N/A'}
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-slate-500">
+                            {op.gerente || 'N/A'}
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-slate-600">
+                            {op.segmento || viewingFullAlignment.celula}
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-medium text-indigo-800 dark:text-indigo-300">
+                            {op.multiplicador || 'T&D/BB'}
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700">
+                            {op.local || 'Ilha Operacional'}
+                          </td>
+                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px]">
+                            {op.dataPresenca || viewingFullAlignment.data} {op.horario || ''}
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                              op.statusPresenca === 'Presente' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                              op.statusPresenca === 'Dispensado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
+                              'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            }`}>
+                              {op.statusPresenca || 'Presente'} {op.tipoAusencia ? `(${op.tipoAusencia})` : ''}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs shrink-0">
+              <span className="text-slate-500 font-semibold">
+                Exibindo {filteredAlignmentOperators.length} de {(viewingFullAlignment.operadores || []).length} operadores vinculados
+              </span>
+              <button
+                onClick={() => setViewingFullAlignment(null)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs"
+              >
+                Fechar Tabela
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* BULK INCLUDE OPERATORS MODAL ("INCLUIR EM MASSA") */}
+      {bulkIncludeItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <form
+            onSubmit={handleExecuteBulkInclude}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">
+                  Inclusão em Massa de Operadores
+                </span>
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase">
+                  {bulkIncludeItem.treinamento}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkIncludeItem(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Cole os Logins dos Operadores (1 por linha ou separados por espaço/vírgula):
+                </label>
+                <textarea
+                  rows={5}
+                  required
+                  placeholder="C1315137&#10;C1286562&#10;C1274287&#10;C1276914"
+                  value={bulkLoginsText}
+                  onChange={(e) => setBulkLoginsText(e.target.value)}
+                  className="w-full p-2.5 font-mono bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white uppercase"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Pelo prefixo "C" o sistema busca automaticamente os dados completos do operador (Supervisor, Gerente, Célula, Mat DP) no Quadro!
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Data do Alinhamento:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={bulkData}
+                    onChange={(e) => setBulkData(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Horário de Realização:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 09:00"
+                    value={bulkHora}
+                    onChange={(e) => setBulkHora(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Multiplicador Responsável:
+                  </label>
+                  <select
+                    value={bulkMultiplicador}
+                    onChange={(e) => setBulkMultiplicador(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
+                  >
+                    {multiplicadores.map(m => (
+                      <option key={m.id} value={m.nome}>{m.nome}</option>
+                    ))}
+                    <option value="T&D / SUPORTE">T&D / SUPORTE GENERALISTA</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Local / Lugar:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Sala 1, Ilha Operacional"
+                    value={bulkLocal}
+                    onChange={(e) => setBulkLocal(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Status da Presença:
+                  </label>
+                  <select
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value as any)}
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
+                  >
+                    <option value="Presente">Presente</option>
+                    <option value="Pendente">Pendente (Atestado, Férias, ABS)</option>
+                    <option value="Dispensado">Dispensado (TO, INSS, LMG)</option>
+                  </select>
+                </div>
+
+                {bulkStatus === 'Pendente' && (
+                  <div>
+                    <label className="block font-bold text-amber-700 dark:text-amber-400 mb-1">
+                      Motivo Pendência:
+                    </label>
+                    <select
+                      value={bulkTipoAusencia}
+                      onChange={(e) => setBulkTipoAusencia(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-amber-700"
+                    >
+                      <option value="Atestado">Atestado Médico</option>
+                      <option value="Férias">Férias</option>
+                      <option value="ABS">ABS (Falta Injustificada)</option>
+                    </select>
+                  </div>
+                )}
+
+                {bulkStatus === 'Dispensado' && (
+                  <div>
+                    <label className="block font-bold text-slate-600 dark:text-slate-300 mb-1">
+                      Motivo Dispensa:
+                    </label>
+                    <select
+                      value={bulkTipoAusencia}
+                      onChange={(e) => setBulkTipoAusencia(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-800"
+                    >
+                      <option value="TO">TO (Treinamento Ocupado)</option>
+                      <option value="INSS">INSS</option>
+                      <option value="LMG">LMG (Licença Maternidade/Gesta)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setBulkIncludeItem(null)}
+                className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs"
+              >
+                Confirmar e Incluir Operadores
+              </button>
+            </div>
+
+          </form>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <form 
@@ -631,7 +1368,7 @@ export const TabuladorView: React.FC = () => {
                   placeholder="Ex: APONTAMENTOS DE CARTÃO DENTRO DO SAC"
                   value={formData.treinamento}
                   onChange={(e) => setFormData({ ...formData, treinamento: e.target.value })}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold uppercase text-slate-900 dark:text-white focus:outline-hidden"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold uppercase text-slate-900 dark:text-white"
                 />
               </div>
 
@@ -643,7 +1380,7 @@ export const TabuladorView: React.FC = () => {
                     required
                     value={formData.solicitante}
                     onChange={(e) => setFormData({ ...formData, solicitante: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white"
                   />
                 </div>
 
@@ -652,7 +1389,7 @@ export const TabuladorView: React.FC = () => {
                   <select
                     value={formData.celula}
                     onChange={(e) => setFormData({ ...formData, celula: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white"
                   >
                     <option value="TODOS">TODOS</option>
                     {celulas.map(c => (
@@ -671,7 +1408,7 @@ export const TabuladorView: React.FC = () => {
                     required
                     value={formData.convocados}
                     onChange={(e) => setFormData({ ...formData, convocados: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
                   />
                 </div>
 
@@ -683,7 +1420,7 @@ export const TabuladorView: React.FC = () => {
                     required
                     value={formData.presentes}
                     onChange={(e) => setFormData({ ...formData, presentes: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-emerald-600 focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-emerald-600"
                   />
                 </div>
 
@@ -694,7 +1431,7 @@ export const TabuladorView: React.FC = () => {
                     min="0"
                     value={formData.dispensado}
                     onChange={(e) => setFormData({ ...formData, dispensado: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
                   />
                 </div>
               </div>
@@ -705,7 +1442,7 @@ export const TabuladorView: React.FC = () => {
                   <select
                     value={formData.cargaHoraria}
                     onChange={(e) => setFormData({ ...formData, cargaHoraria: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono text-slate-900 dark:text-white focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono text-slate-900 dark:text-white"
                   >
                     <option value="0:15:00">0:15:00 (15 min)</option>
                     <option value="0:20:00">0:20:00 (20 min)</option>
@@ -725,7 +1462,7 @@ export const TabuladorView: React.FC = () => {
                     required
                     value={formData.data}
                     onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white focus:outline-hidden"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white"
                   />
                 </div>
               </div>
@@ -736,7 +1473,7 @@ export const TabuladorView: React.FC = () => {
                   rows={2}
                   value={formData.observacoes}
                   onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white focus:outline-hidden"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white"
                 />
               </div>
             </div>
@@ -760,158 +1497,7 @@ export const TabuladorView: React.FC = () => {
         </div>
       )}
 
-      {/* DETAIL MODAL / OPERATOR PRESENCE LIST DRAWER */}
-      {selectedDetailItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-2xl w-full p-5 space-y-4 max-h-[90vh] flex flex-col">
-            
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
-              <div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase">
-                  {selectedDetailItem.celula}
-                </span>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white mt-1 uppercase">
-                  {selectedDetailItem.treinamento}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Solicitante: {selectedDetailItem.solicitante} | CH: {selectedDetailItem.cargaHoraria} | Horas Totais: {selectedDetailItem.horasTreinamento}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setSelectedDetailItem(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Quick Metrics Bar inside Drawer */}
-            <div className="grid grid-cols-4 gap-2 text-center bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
-              <div>
-                <span className="block text-[10px] font-bold text-slate-400 uppercase">Convocados</span>
-                <span className="text-sm font-black text-slate-900 dark:text-white">{selectedDetailItem.convocados}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold text-emerald-600 uppercase">Presentes</span>
-                <span className="text-sm font-black text-emerald-600">{selectedDetailItem.presentes}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold text-slate-500 uppercase">Dispensados</span>
-                <span className="text-sm font-black text-slate-600 dark:text-slate-300">{selectedDetailItem.dispensado}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold text-amber-600 uppercase">% Aderência</span>
-                <span className="text-sm font-black text-amber-600">{selectedDetailItem.percentual}%</span>
-              </div>
-            </div>
-
-            {/* Add Operator by Login BB */}
-            <div className="space-y-1 shrink-0">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                Vincular Operador pelo Login BB (Quadro de Operadores):
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="Digite o Login BB (ex: C1315137)..."
-                  value={opInputLogin}
-                  onChange={(e) => {
-                    setOpInputLogin(e.target.value);
-                    if (opLookupError) setOpLookupError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddOperatorToDetail();
-                    }
-                  }}
-                  className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white uppercase font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddOperatorToDetail}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs shrink-0"
-                >
-                  Adicionar
-                </button>
-              </div>
-              {opLookupError && (
-                <p className="text-xs text-red-600 dark:text-red-400 font-semibold">{opLookupError}</p>
-              )}
-            </div>
-
-            {/* List of Attached Operators */}
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
-              <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                Lista de Operadores Vinculados (Total: {selectedDetailItem.operadores.length})
-              </div>
-
-              {selectedDetailItem.operadores.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-400 italic">
-                  Nenhum operador vinculado individualmente. As métricas acima estão registradas via totais do treinamento.
-                </div>
-              ) : (
-                selectedDetailItem.operadores.map((op) => (
-                  <div 
-                    key={op.loginBB} 
-                    className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200/80 dark:border-slate-700 text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{op.loginBB}</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{op.nome}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400">
-                        Supervisor: {op.supervisor || 'N/A'} | Célula: {op.segmento || 'N/A'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <select
-                        value={op.statusPresenca || 'Presente'}
-                        onChange={(e) => handleToggleOperatorPresence(op.loginBB, e.target.value as any)}
-                        className={`px-2 py-1 rounded text-[11px] font-bold border ${
-                          op.statusPresenca === 'Presente'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : op.statusPresenca === 'Dispensado'
-                            ? 'bg-slate-200 text-slate-700 border-slate-300'
-                            : 'bg-amber-100 text-amber-800 border-amber-300'
-                        }`}
-                      >
-                        <option value="Presente">Presente</option>
-                        <option value="Dispensado">Dispensado</option>
-                        <option value="Pendente">Pendente</option>
-                      </select>
-
-                      <button
-                        onClick={() => handleRemoveOperatorFromDetail(op.loginBB)}
-                        className="p-1 text-slate-400 hover:text-red-600 rounded"
-                        title="Remover operador"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedDetailItem(null)}
-                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold"
-              >
-                Concluído
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal for Delete */}
+      {/* CONFIRMATION MODAL FOR DELETE */}
       <PasswordConfirmModal
         isOpen={deletingId !== null}
         onClose={() => setDeletingId(null)}

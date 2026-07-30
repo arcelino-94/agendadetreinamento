@@ -11,11 +11,13 @@ import { MultiplicadoresView } from './components/MultiplicadoresView';
 import { SalasView } from './components/SalasView';
 import { RelatoriosView } from './components/RelatoriosView';
 import { TabuladorView } from './components/TabuladorView';
+import { FrequenciasNotasView } from './components/FrequenciasNotasView';
 import { QuadroOperadoresView } from './components/QuadroOperadoresView';
 import { SegurancaView } from './components/SegurancaView';
 
 import { NovaDemandaModal } from './components/NovaDemandaModal';
 import { NovaTurmaModal } from './components/NovaTurmaModal';
+import { ReservarSalaModal } from './components/ReservarSalaModal';
 import { TurmaDetalhesModal } from './components/TurmaDetalhesModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
 
@@ -29,6 +31,7 @@ export function AppContent() {
   const [editingDemanda, setEditingDemanda] = useState<Demanda | null>(null);
 
   const [isNovaTurmaOpen, setIsNovaTurmaOpen] = useState(false);
+  const [isReservarSalaOpen, setIsReservarSalaOpen] = useState(false);
   const [novaTurmaPreset, setNovaTurmaPreset] = useState<any>(null);
 
   const [selectedTurmaDetail, setSelectedTurmaDetail] = useState<Turma | null>(null);
@@ -83,6 +86,7 @@ export function AppContent() {
       <Header 
         onOpenNovaDemanda={handleOpenNovaDemanda}
         onOpenNovaTurma={() => handleOpenNovaTurma()}
+        onOpenReservarSala={() => setIsReservarSalaOpen(true)}
         onOpenFirebaseModal={() => setIsFirebaseModalOpen(true)}
       />
 
@@ -140,6 +144,10 @@ export function AppContent() {
             <TabuladorView />
           )}
 
+          {activeTab === 'frequencias' && (
+            <FrequenciasNotasView />
+          )}
+
           {activeTab === 'quadro' && (
             <QuadroOperadoresView />
           )}
@@ -166,6 +174,12 @@ export function AppContent() {
         isOpen={isNovaTurmaOpen}
         onClose={() => setIsNovaTurmaOpen(false)}
         initialPreset={novaTurmaPreset}
+      />
+
+      <ReservarSalaModal 
+        isOpen={isReservarSalaOpen}
+        onClose={() => setIsReservarSalaOpen(false)}
+        onSelectSalaToBook={(preset) => handleOpenNovaTurma(preset)}
       />
 
       <TurmaDetalhesModal 
