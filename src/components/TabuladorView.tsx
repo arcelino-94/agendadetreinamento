@@ -475,7 +475,7 @@ export const TabuladorView: React.FC = () => {
         solicitante: 'OPERAÇÃO / T&D/BB',
         celula: celulas[0]?.nome || 'SAC PRIORITÁRIO',
         convocados: 20,
-        presentes: 20,
+        presentes: 0,
         dispensado: 0,
         cargaHoraria: '0:20:00',
         data: new Date().toISOString().split('T')[0],
@@ -543,8 +543,8 @@ export const TabuladorView: React.FC = () => {
     setBulkMultiplicador(multiplicadores[0]?.nome || 'MARIA CLARA');
     setBulkHora('09:00');
     setBulkLocal('Ilha Operacional');
-    setBulkStatus('Presente');
-    setBulkTipoAusencia('');
+    setBulkStatus('Pendente');
+    setBulkTipoAusencia('Atestado');
   };
 
   const handleExecuteBulkInclude = (e: React.FormEvent) => {
@@ -951,8 +951,8 @@ export const TabuladorView: React.FC = () => {
 
       {/* DEDICATED FULL TABLE MODAL FOR SINGLE ALIGNMENT (CLICKING TITLE) */}
       {viewingFullAlignment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[94vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-2 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-[96vw] max-w-[1720px] h-[92vh] flex flex-col overflow-hidden">
             
             {/* MODAL HEADER */}
             <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
@@ -1168,7 +1168,7 @@ export const TabuladorView: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <form
             onSubmit={handleExecuteBulkInclude}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div>

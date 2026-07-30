@@ -79,22 +79,6 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </div>
 
-            {/* Status do Firebase / Sincronização */}
-            <button
-              onClick={onOpenFirebaseModal}
-              className={`flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-all ${
-                isFirebaseConnected
-                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30'
-                  : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
-              }`}
-              title="Status da Sincronização em Nuvem (Firebase Firestore)"
-            >
-              <Database className={`w-3.5 h-3.5 ${isFirebaseConnected ? 'text-emerald-300 animate-pulse' : 'text-indigo-200'}`} />
-              <span className="hidden md:inline text-[11px] font-semibold">
-                {isFirebaseConnected ? 'Firestore Conectado' : 'Sinc. Local'}
-              </span>
-            </button>
-
             {/* Alertas de SLA / Notificações */}
             <div className="relative">
               <button

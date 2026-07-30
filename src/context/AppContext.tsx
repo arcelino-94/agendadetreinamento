@@ -101,7 +101,24 @@ const BROADCAST_CHANNEL = 'td_callcenter_broadcast_v2';
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('td_dark_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Sync dark mode class on html root element
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('td_dark_mode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('td_dark_mode', 'false');
+    }
+  }, [isDarkMode]);
   const [securityPassword, setSecurityPasswordState] = useState<string>('123456');
 
   // Entities state
