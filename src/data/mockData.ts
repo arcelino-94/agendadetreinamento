@@ -3,7 +3,9 @@ import { Multiplicador, CelulaAtendimento, SalaTreinamento, Demanda, Turma, Oper
 export const INITIAL_CELULAS: CelulaAtendimento[] = [
   { id: 'cel-1', nome: 'ROI', gestor: 'Jefferson Luiz', operadoresAtivos: 35 },
   { id: 'cel-2', nome: 'OUVIDORIA', gestor: 'Girleide Lira', operadoresAtivos: 42 },
-  { id: 'cel-3', nome: 'MULTIMEIOS', gestor: 'Rosana Gomes', operadoresAtivos: 110 },
+  { id: 'cel-3a', nome: 'MULTIMEIOS CARTÃO', gestor: 'Rosana Gomes', operadoresAtivos: 45 },
+  { id: 'cel-3b', nome: 'MULTIMEIOS NUVEM', gestor: 'Rosana Gomes', operadoresAtivos: 35 },
+  { id: 'cel-3c', nome: 'MULTIMEIOS RECLAMAR', gestor: 'Rosana Gomes', operadoresAtivos: 30 },
   { id: 'cel-4', nome: 'FRAUDE', gestor: 'Fabiana Soares', operadoresAtivos: 38 },
   { id: 'cel-5', nome: 'SAC PRIORITARIO', gestor: 'Girleide Lira', operadoresAtivos: 45 },
   { id: 'cel-6', nome: 'SAC CARTAO', gestor: 'Girleide Lira', operadoresAtivos: 40 },
@@ -348,6 +350,49 @@ export const INITIAL_TABULADOR: AlinhamentoTabulador[] = [
       { loginBB: 'C1286562', nome: 'CARLOS HENRIQUE PEREIRA', matDP: '28441', supervisor: 'Ana Paula Silva', gerente: 'Jefferson Luiz', segmento: 'ROI', multiplicador: 'RAFAEL OLIVEIRA DE MENDONCA', local: 'Sala 1', statusPresenca: 'Presente', dataPresenca: today, horario: '14:00' },
       { loginBB: 'C1274287', nome: 'MARIANA COSTA SANTOS', matDP: '27990', supervisor: 'Rafael Pereira', gerente: 'Jefferson Luiz', segmento: 'ROI', multiplicador: 'JOSE LEANDRO DE ALBUQUERQUE BRAGA', local: 'Sala 1', statusPresenca: 'Presente', dataPresenca: today, horario: '15:00' },
       { loginBB: 'C1276914', nome: 'JULIANA MARTINS DE OLIVEIRA', matDP: '28012', supervisor: 'Marcos Vinicius', gerente: 'Jefferson Luiz', segmento: 'ROI', multiplicador: 'JOSE LEANDRO DE ALBUQUERQUE BRAGA', local: 'Sala 1', statusPresenca: 'Presente', dataPresenca: today, horario: '15:00' }
+    ],
+    status: 'Concluído',
+    criadoEm: new Date().toISOString()
+  },
+  {
+    id: 'TAB-104',
+    treinamento: 'SINERGIA - MULTIMEIOS CARTÃO & NUVEM',
+    solicitante: 'OPERAÇÃO / T&D/BB',
+    celula: 'MULTIMEIOS CARTÃO',
+    convocados: 4,
+    presentes: 4,
+    dispensado: 0,
+    pendentes: 0,
+    horasTreinamento: '2:00:00',
+    cargaHoraria: '0:30:00',
+    percentual: 100,
+    data: today,
+    operadores: [
+      { loginBB: 'C1315137', nome: 'CINTIA RAYANE BATISTA DA SILVA', matDP: '29347', supervisor: 'Rafael Pereira', gerente: 'Jefferson Luiz', segmento: 'MULTIMEIOS CARTÃO', multiplicador: 'GEOVANNE FERREIRA DE ARCELINO', local: 'Sala 3', statusPresenca: 'Presente', dataPresenca: today, horario: '10:00' },
+      { loginBB: 'C1286562', nome: 'CARLOS HENRIQUE PEREIRA', matDP: '28441', supervisor: 'Ana Paula Silva', gerente: 'Jefferson Luiz', segmento: 'MULTIMEIOS NUVEM', multiplicador: 'GEOVANNE FERREIRA DE ARCELINO', local: 'Sala 3', statusPresenca: 'Presente', dataPresenca: today, horario: '10:00' },
+      { loginBB: 'C1274287', nome: 'MARIANA COSTA SANTOS', matDP: '27990', supervisor: 'Rafael Pereira', gerente: 'Jefferson Luiz', segmento: 'MULTIMEIOS CARTÃO', multiplicador: 'BRUNA THAIS DA SILVA SANTOS', local: 'Sala 3', statusPresenca: 'Presente', dataPresenca: today, horario: '10:30' },
+      { loginBB: 'C1334914', nome: 'ACIDALIA DE CARVALHO FRANCA', matDP: '40546', supervisor: 'Gutemberg Costa', gerente: 'Rosana Gomes', segmento: 'MULTIMEIOS NUVEM', multiplicador: 'BRUNA THAIS DA SILVA SANTOS', local: 'Sala 3', statusPresenca: 'Presente', dataPresenca: today, horario: '10:30' }
+    ],
+    status: 'Concluído',
+    criadoEm: new Date().toISOString()
+  },
+  {
+    id: 'TAB-105',
+    treinamento: 'SINERGIA - MULTIMEIOS RECLAMAR & OUVIDORIA',
+    solicitante: 'OPERAÇÃO / T&D/BB',
+    celula: 'MULTIMEIOS RECLAMAR',
+    convocados: 3,
+    presentes: 3,
+    dispensado: 0,
+    pendentes: 0,
+    horasTreinamento: '1:30:00',
+    cargaHoraria: '0:30:00',
+    percentual: 100,
+    data: today,
+    operadores: [
+      { loginBB: 'C1315137', nome: 'CINTIA RAYANE BATISTA DA SILVA', matDP: '29347', supervisor: 'Rafael Pereira', gerente: 'Jefferson Luiz', segmento: 'MULTIMEIOS RECLAMAR', multiplicador: 'KELLY CARNEIRO DA SILVA LEMOS', local: 'Ilha Operacional', statusPresenca: 'Presente', dataPresenca: today, horario: '11:00' },
+      { loginBB: 'C1286562', nome: 'CARLOS HENRIQUE PEREIRA', matDP: '28441', supervisor: 'Ana Paula Silva', gerente: 'Jefferson Luiz', segmento: 'MULTIMEIOS RECLAMAR', multiplicador: 'KELLY CARNEIRO DA SILVA LEMOS', local: 'Ilha Operacional', statusPresenca: 'Presente', dataPresenca: today, horario: '11:00' },
+      { loginBB: 'C1334988', nome: 'RAYANE CRISTINE ALVES DOS SANTOS', matDP: '40828', supervisor: 'Avani Martir', gerente: 'Girleide Lira', segmento: 'OUVIDORIA', multiplicador: 'KELLY CARNEIRO DA SILVA LEMOS', local: 'Ilha Operacional', statusPresenca: 'Presente', dataPresenca: today, horario: '11:30' }
     ],
     status: 'Concluído',
     criadoEm: new Date().toISOString()

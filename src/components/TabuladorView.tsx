@@ -561,19 +561,19 @@ export const TabuladorView: React.FC = () => {
 
     logins.forEach(login => {
       const opQuadro = getOperadorByLogin(login);
-      // Remove existing entry for same login if updating
+      // Check existing entry for same login if updating
       const index = newOps.findIndex(o => o.loginBB.toUpperCase() === login);
       
       const newOpEntry: OperadorAlinhamento = {
         loginBB: login,
-        nome: opQuadro ? opQuadro.nome : `OPERADOR ${login}`,
-        matDP: opQuadro ? opQuadro.matDP : 'N/A',
-        supervisor: opQuadro ? opQuadro.supervisor : 'N/A',
-        gerente: opQuadro ? opQuadro.gerente : 'N/A',
-        segmento: opQuadro ? opQuadro.segmento : bulkIncludeItem.celula,
+        nome: opQuadro ? opQuadro.nome : 'login não localizado no quadro',
+        matDP: opQuadro ? opQuadro.matDP : (index >= 0 ? newOps[index].matDP : 'N/A'),
+        supervisor: opQuadro ? opQuadro.supervisor : (index >= 0 ? newOps[index].supervisor : 'N/A'),
+        gerente: opQuadro ? opQuadro.gerente : (index >= 0 ? newOps[index].gerente : 'N/A'),
+        segmento: opQuadro ? opQuadro.segmento : (index >= 0 ? newOps[index].segmento : bulkIncludeItem.celula),
         dataPresenca: bulkData,
         horario: bulkHora,
-        multiplicador: bulkMultiplicador,
+        multiplicador: bulkMultiplicador || 'Sem Multiplicador',
         local: bulkLocal,
         statusPresenca: bulkStatus,
         tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
@@ -1244,6 +1244,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={(e) => setBulkMultiplicador(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
                   >
+                    <option value="Sem Multiplicador">Sem Multiplicador</option>
                     {multiplicadores.map(m => (
                       <option key={m.id} value={m.nome}>{m.nome}</option>
                     ))}

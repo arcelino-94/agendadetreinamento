@@ -14,7 +14,8 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  History
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getDeadlineAlerts } from '../lib/planningEngine';
@@ -110,6 +111,12 @@ export const Sidebar: React.FC = () => {
           {operadores.length}
         </span>
       )
+    },
+    {
+      id: 'jornada',
+      label: 'Jornada do Operador',
+      icon: History,
+      badge: null
     },
     {
       id: 'seguranca',

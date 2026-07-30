@@ -589,8 +589,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const bulkSetOperadores = (novosOperadores: OperadorQuadro[]) => {
+    // Create lookup map for new active operators
+    const opMap = new Map<string, OperadorQuadro>();
+    novosOperadores.forEach(op => {
+      if (op.loginBB) {
+        opMap.set(op.loginBB.trim().toUpperCase(), op);
+      }
+    });
+
+    // Update matching operators in tabulador without deleting any tabulador records
+    const updatedTabulador = tabulador.map(item => {
+      if (!Array.isArray(item.operadores) || item.operadores.length === 0) return item;
+      
+      let changed = false;
+      const updatedOps = item.operadores.map(op => {
+        const cleanLogin = op.loginBB ? op.loginBB.trim().toUpperCase() : '';
+        const activeOp = cleanLogin ? opMap.get(cleanLogin) : undefined;
+
+        if (activeOp) {
+          changed = true;
+          return {
+            ...op,
+            nome: activeOp.nome || op.nome,
+            matDP: activeOp.matDP || op.matDP,
+            supervisor: activeOp.supervisor || op.supervisor,
+            gerente: activeOp.gerente || op.gerente,
+            segmento: activeOp.segmento || op.segmento
+          };
+        }
+        return op;
+      });
+
+      return changed ? { ...item, operadores: updatedOps } : item;
+    });
+
     setOperadores(novosOperadores);
-    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: novosOperadores, tabulador });
+    setTabulador(updatedTabulador);
+    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: novosOperadores, tabulador: updatedTabulador });
   };
 
   const getOperadorByLogin = (loginBB: string): OperadorQuadro | undefined => {

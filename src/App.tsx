@@ -13,6 +13,7 @@ import { RelatoriosView } from './components/RelatoriosView';
 import { TabuladorView } from './components/TabuladorView';
 import { FrequenciasNotasView } from './components/FrequenciasNotasView';
 import { QuadroOperadoresView } from './components/QuadroOperadoresView';
+import { JornadaOperadorView } from './components/JornadaOperadorView';
 import { SegurancaView } from './components/SegurancaView';
 
 import { NovaDemandaModal } from './components/NovaDemandaModal';
@@ -150,6 +151,10 @@ export function AppContent() {
 
           {activeTab === 'quadro' && (
             <QuadroOperadoresView />
+          )}
+
+          {activeTab === 'jornada' && (
+            <JornadaOperadorView />
           )}
 
           {activeTab === 'seguranca' && (
