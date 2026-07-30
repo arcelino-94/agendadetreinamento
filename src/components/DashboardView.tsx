@@ -45,41 +45,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenNovaDemanda,
   return (
     <div className="space-y-3">
       
-      {/* Banner de Boas-Vindas & Ações Rápidas */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-xl p-4 text-white shadow-md relative overflow-hidden border border-slate-800">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <div className="inline-flex items-center space-x-1.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase">
-              <Sparkles className="w-3 h-3 text-indigo-400" />
-              <span>Painel de Operações T&D em Tempo Real</span>
-            </div>
-            <h2 className="text-base sm:text-lg font-bold tracking-tight">
-              Gestão Centralizada de Treinamentos Call Center
-            </h2>
-            <p className="text-slate-300 text-[11px] max-w-2xl leading-tight">
-              Monitore a disponibilidade dos {multiplicadores.length} multiplicadores, controle de capacidade das {salas.length} salas e agrupamento automático de pedidos.
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-2 shrink-0">
-            <button
-              onClick={() => setActiveTab('assistente')}
-              className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Recomendações ({agrupamentos.length + encaixes.length})</span>
-            </button>
-            <button
-              onClick={onOpenNovaDemanda}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-all flex items-center space-x-1"
-            >
-              <span>+ Novo Pedido</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Grid de Cards de Métricas (KPIs) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         

@@ -61,6 +61,7 @@ interface AppContextType {
 
   // Reset
   resetToInitialData: () => void;
+  clearAllData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -429,6 +430,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDemandas(INITIAL_DEMANDAS);
     setTurmas(INITIAL_TURMAS);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    persistAndNotify({
+      multiplicadores: INITIAL_MULTIPLICADORES,
+      celulas: INITIAL_CELULAS,
+      salas: INITIAL_SALAS,
+      demandas: INITIAL_DEMANDAS,
+      turmas: INITIAL_TURMAS
+    });
+  };
+
+  const clearAllData = () => {
+    setMultiplicadores([]);
+    setCelulas([]);
+    setSalas([]);
+    setDemandas([]);
+    setTurmas([]);
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    persistAndNotify({
+      multiplicadores: [],
+      celulas: [],
+      salas: [],
+      demandas: [],
+      turmas: []
+    });
   };
 
   return (
@@ -462,7 +486,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteSala,
         checkRoomConflict,
         checkTrainerConflict,
-        resetToInitialData
+        resetToInitialData,
+        clearAllData
       }}
     >
       {children}
