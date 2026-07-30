@@ -99,6 +99,47 @@ export interface SugestaoEncaixe {
   motivo: string;
 }
 
+export interface OperadorQuadro {
+  id: string;
+  matDP: string;
+  loginBB: string;
+  nome: string;
+  supervisor: string;
+  gerente: string;
+  horarioEntrada: string;
+  segmento: string;
+}
+
+export interface OperadorAlinhamento {
+  loginBB: string;
+  nome: string;
+  matDP?: string;
+  supervisor?: string;
+  gerente?: string;
+  horarioEntrada?: string;
+  segmento?: string;
+  statusPresenca?: 'Presente' | 'Dispensado' | 'Pendente';
+}
+
+export interface AlinhamentoTabulador {
+  id: string;
+  treinamento: string;     // Nome/Título do treinamento
+  solicitante: string;     // e.g. "OPERAÇÃO / T&D/BB"
+  celula: string;          // e.g. "SAC PRIORITÁRIO", "HD N1", "ROI"
+  convocados: number;
+  presentes: number;
+  dispensado: number;
+  pendentes: number;       // Convocados - Presentes - Dispensado
+  horasTreinamento: string;// e.g. "7:40:00"
+  cargaHoraria: string;    // CH e.g. "0:20:00"
+  percentual: number;      // % de aproveitamento/aderência
+  data: string;
+  operadores: OperadorAlinhamento[];
+  observacoes?: string;
+  status: 'Pendente' | 'Concluído';
+  criadoEm: string;
+}
+
 export interface FirebaseConfigCustom {
   apiKey: string;
   authDomain: string;

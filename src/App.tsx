@@ -10,6 +10,9 @@ import { MatrizEspecialidadesView } from './components/MatrizEspecialidadesView'
 import { MultiplicadoresView } from './components/MultiplicadoresView';
 import { SalasView } from './components/SalasView';
 import { RelatoriosView } from './components/RelatoriosView';
+import { TabuladorView } from './components/TabuladorView';
+import { QuadroOperadoresView } from './components/QuadroOperadoresView';
+import { SegurancaView } from './components/SegurancaView';
 
 import { NovaDemandaModal } from './components/NovaDemandaModal';
 import { NovaTurmaModal } from './components/NovaTurmaModal';
@@ -131,6 +134,18 @@ export function AppContent() {
 
           {activeTab === 'salas' && (
             <SalasView />
+          )}
+
+          {activeTab === 'tabulador' && (
+            <TabuladorView />
+          )}
+
+          {activeTab === 'quadro' && (
+            <QuadroOperadoresView />
+          )}
+
+          {activeTab === 'seguranca' && (
+            <SegurancaView />
           )}
 
           {activeTab === 'relatorios' && (

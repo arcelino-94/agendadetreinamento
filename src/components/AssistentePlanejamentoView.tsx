@@ -2,13 +2,9 @@ import React, { useState } from 'react';
 import { 
   Sparkles, 
   Users, 
-  Building2, 
   Clock, 
-  ArrowRight, 
   CheckCircle2, 
   AlertTriangle, 
-  BookOpen, 
-  Send, 
   Plus, 
   Check,
   Layers
@@ -26,13 +22,8 @@ export const AssistentePlanejamentoView: React.FC<AssistentePlanejamentoViewProp
 }) => {
   const { demandas, multiplicadores, salas, turmas, addTurma } = useApp();
 
-  const [selectedTab, setSelectedTab] = useState<'agrupamentos' | 'encaixes' | 'alertas' | 'gemini'>('agrupamentos');
+  const [selectedTab, setSelectedTab] = useState<'agrupamentos' | 'encaixes' | 'alertas'>('agrupamentos');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  // Gemini Syllabus Generator state
-  const [geminiTopic, setGeminiTopic] = useState<string>('PIX - Regras de Contestação e Fraude');
-  const [geminiResult, setGeminiResult] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
   // Análises do motor
   const agrupamentos = detectSmartGroupings(demandas, multiplicadores, salas);
@@ -85,69 +76,17 @@ export const AssistentePlanejamentoView: React.FC<AssistentePlanejamentoViewProp
     }
   };
 
-  // Gerar Plano de Aula via Gemini AI API
-  const handleGenerateSyllabus = async () => {
-    if (!geminiTopic.trim()) return;
-    setIsGenerating(true);
-    setGeminiResult(null);
-
-    try {
-      const response = await fetch('/api/generate-syllabus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: geminiTopic })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setGeminiResult(data.syllabus);
-      } else {
-        // Fallback local se a API não estiver com chave configurada
-        setGeminiResult(`📌 ROTEIRO E PLANO DE AULA T&D CALL CENTER
-Tema: ${geminiTopic}
-Duração Sugerida: 4 horas
-
-MÓDULO 1: Introdução e Contexto Operacional (45min)
-- Apresentação dos objetivos do treinamento
-- Visão geral das mudanças no sistema/regra
-- Impacto nos KPIs da Célula (TMA, FCR, CSAT)
-
-MÓDULO 2: Parte Prática e Estudo de Casos (90min)
-- Simulação de atendimento em ambiente de homologação
-- Análise das principais dúvidas dos operadores
-- Checklists de procedimentos obrigatórios
-
-MÓDULO 3: Exercícios em Dupla e Avaliação (60min)
-- Roleplay de casos reais de atendimento
-- Aplicação do teste de fixação (mínimo 85% de aproveitamento)
-
-MÓDULO 4: Encerramento e Feedback (45min)
-- Tirada de dúvidas finais
-- Entrega de material de consulta rápida e manual de apoio`);
-      }
-    } catch (err) {
-      setGeminiResult(`📌 ROTEIRO DE AULA SUGERIDO PARA T&D:
-Tema: ${geminiTopic}
-
-1. Módulo Conceitual (1h): Apresentação teórica e regras operacionais.
-2. Módulo Prático (2h): Navegação guiada no sistema e simulação de chamadas.
-3. Módulo de Fixação (1h): Quiz de conhecimento e entrega do guia rápido de bolso.`);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-12">
       
       {/* Header do Assistente */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <div className="p-2 bg-indigo-50 dark:bg-indigo-950/80 rounded-xl text-indigo-600 dark:text-indigo-400">
               <Sparkles className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               Assistente Inteligente de Planejamento T&D
             </h2>
           </div>
@@ -157,7 +96,7 @@ Tema: ${geminiTopic}
         </div>
 
         {successMsg && (
-          <div className="bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 animate-pulse">
+          <div className="bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-2 animate-pulse">
             <Check className="w-4 h-4" />
             <span>{successMsg}</span>
           </div>
@@ -168,7 +107,7 @@ Tema: ${geminiTopic}
       <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto pb-1 text-xs">
         <button
           onClick={() => setSelectedTab('agrupamentos')}
-          className={`px-4 py-2 font-semibold rounded-t-xl transition-all flex items-center space-x-2 shrink-0 ${
+          className={`px-3 py-1.5 font-bold rounded-t-lg transition-all flex items-center space-x-2 shrink-0 ${
             selectedTab === 'agrupamentos'
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -180,7 +119,7 @@ Tema: ${geminiTopic}
 
         <button
           onClick={() => setSelectedTab('encaixes')}
-          className={`px-4 py-2 font-semibold rounded-t-xl transition-all flex items-center space-x-2 shrink-0 ${
+          className={`px-3 py-1.5 font-bold rounded-t-lg transition-all flex items-center space-x-2 shrink-0 ${
             selectedTab === 'encaixes'
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -192,7 +131,7 @@ Tema: ${geminiTopic}
 
         <button
           onClick={() => setSelectedTab('alertas')}
-          className={`px-4 py-2 font-semibold rounded-t-xl transition-all flex items-center space-x-2 shrink-0 ${
+          className={`px-3 py-1.5 font-bold rounded-t-lg transition-all flex items-center space-x-2 shrink-0 ${
             selectedTab === 'alertas'
               ? 'bg-rose-600 text-white shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -201,30 +140,18 @@ Tema: ${geminiTopic}
           <AlertTriangle className="w-4 h-4" />
           <span>Alertas de SLA ({alertas.length})</span>
         </button>
-
-        <button
-          onClick={() => setSelectedTab('gemini')}
-          className={`px-4 py-2 font-semibold rounded-t-xl transition-all flex items-center space-x-2 shrink-0 ${
-            selectedTab === 'gemini'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Gerador de Plano de Aula IA</span>
-        </button>
       </div>
 
       {/* Conteúdo da Aba 1: Agrupamento Inteligente */}
       {selectedTab === 'agrupamentos' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {agrupamentos.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-800 space-y-3">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-8 text-center border border-slate-200 dark:border-slate-800 space-y-2">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Nenhuma duplicidade de pedido encontrada
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
                 O motor analisa continuamente novas solicitações. Quando houver temas idênticos em células diferentes, eles aparecerão aqui recomendando unificação.
               </p>
             </div>
@@ -232,12 +159,12 @@ Tema: ${geminiTopic}
             agrupamentos.map((group, idx) => (
               <div 
                 key={idx}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs"
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-2xs"
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                      <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 text-xs font-bold px-2 py-0.5 rounded-md">
                         Tema: {group.tema}
                       </span>
                       <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -251,30 +178,30 @@ Tema: ${geminiTopic}
 
                   <button
                     onClick={() => handleAprovarAgrupamento(group)}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 flex items-center justify-center space-x-1.5"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs shrink-0 flex items-center justify-center space-x-1.5"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Criar Turma Unificada</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl">
-                    <span className="text-slate-400 font-semibold block mb-1">Células Solicitantes:</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg">
+                    <span className="text-slate-400 font-semibold block mb-0.5 text-[10px] uppercase">Células Solicitantes:</span>
                     <p className="font-bold text-slate-800 dark:text-slate-200">
                       {group.celulas.join(', ')}
                     </p>
                   </div>
 
-                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl">
-                    <span className="text-slate-400 font-semibold block mb-1">Multiplicadores Recomendados:</span>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg">
+                    <span className="text-slate-400 font-semibold block mb-0.5 text-[10px] uppercase">Multiplicadores Aptos:</span>
                     <p className="font-bold text-slate-800 dark:text-slate-200">
                       {group.multiplicadoresAptos.map(m => m.nome).join(', ')}
                     </p>
                   </div>
 
-                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl">
-                    <span className="text-slate-400 font-semibold block mb-1">Salas com Capacidade:</span>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg">
+                    <span className="text-slate-400 font-semibold block mb-0.5 text-[10px] uppercase">Salas Disponíveis:</span>
                     <p className="font-bold text-slate-800 dark:text-slate-200">
                       {group.salasAptas.map(s => `${s.nome} (cap. ${s.capacidade})`).join(', ')}
                     </p>
@@ -288,14 +215,14 @@ Tema: ${geminiTopic}
 
       {/* Conteúdo da Aba 2: Encaixes Automáticos */}
       {selectedTab === 'encaixes' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {encaixes.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-800 space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-8 text-center border border-slate-200 dark:border-slate-800 space-y-2">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 Nenhum encaixe pendente
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Todas as solicitações possuem turma agendada ou aguardam novas vagas.
               </p>
             </div>
@@ -303,11 +230,11 @@ Tema: ${geminiTopic}
             encaixes.map((slot, idx) => (
               <div 
                 key={idx}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
               >
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <div className="flex items-center space-x-2">
-                    <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded text-[11px] font-bold">
+                    <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
                       {slot.demanda.tipo}
                     </span>
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white">
@@ -317,7 +244,7 @@ Tema: ${geminiTopic}
                   <p className="text-xs text-slate-600 dark:text-slate-400">
                     {slot.motivo}
                   </p>
-                  <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                  <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
                     <span>Multiplicador: <strong>{slot.multiplicador.nome}</strong></span>
                     <span>Sala: <strong>{slot.sala.nome}</strong></span>
                     <span>Horário: <strong>{slot.horarioInicio} às {slot.horarioFim}</strong></span>
@@ -326,7 +253,7 @@ Tema: ${geminiTopic}
 
                 <button
                   onClick={() => handleAprovarEncaixe(slot)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs shrink-0"
                 >
                   Confirmar e Criar Turma
                 </button>
@@ -338,11 +265,11 @@ Tema: ${geminiTopic}
 
       {/* Conteúdo da Aba 3: Alertas de SLA */}
       {selectedTab === 'alertas' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {alertas.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-800 space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-8 text-center border border-slate-200 dark:border-slate-800 space-y-2">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 SLA em 100%! Nenhum pedido em atraso.
               </h3>
             </div>
@@ -350,7 +277,7 @@ Tema: ${geminiTopic}
             alertas.map(d => (
               <div 
                 key={d.id}
-                className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
@@ -370,45 +297,6 @@ Tema: ${geminiTopic}
                 </div>
               </div>
             ))
-          )}
-        </div>
-      )}
-
-      {/* Conteúdo da Aba 4: Gerador de Plano de Aula IA */}
-      {selectedTab === 'gemini' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs">
-          <div className="space-y-1">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-              <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Assistente Gemini IA - Elaborador de Roteiro Pedagógico</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Digite o tema do treinamento para gerar um plano de aula completo com módulos, carga horária e dinâmicas sugeridas para o Call Center.
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={geminiTopic}
-              onChange={(e) => setGeminiTopic(e.target.value)}
-              placeholder="Ex: Treinamento de Retenção e Alçadas de Desconto"
-              className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              onClick={handleGenerateSyllabus}
-              disabled={isGenerating}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>{isGenerating ? 'Gerando...' : 'Gerar Roteiro'}</span>
-            </button>
-          </div>
-
-          {geminiResult && (
-            <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
-              {geminiResult}
-            </div>
           )}
         </div>
       )}
