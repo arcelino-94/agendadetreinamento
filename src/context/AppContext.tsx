@@ -265,6 +265,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.turmas) setTurmas(data.turmas);
         if (data.operadores) setOperadores(data.operadores);
         if (data.tabulador) setTabulador(data.tabulador);
+
+        // Manter o localStorage localmente sincronizado com o snapshot da nuvem
+        try {
+          const currentLocal = localStorage.getItem(LOCAL_STORAGE_KEY);
+          const parsedLocal = currentLocal ? JSON.parse(currentLocal) : {};
+          const merged = {
+            ...parsedLocal,
+            ...(data.multiplicadores && { multiplicadores: data.multiplicadores }),
+            ...(data.celulas && { celulas: data.celulas }),
+            ...(data.salas && { salas: data.salas }),
+            ...(data.demandas && { demandas: data.demandas }),
+            ...(data.turmas && { turmas: data.turmas }),
+            ...(data.operadores && { operadores: data.operadores }),
+            ...(data.tabulador && { tabulador: data.tabulador }),
+          };
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+        } catch (e) {
+          console.warn('Erro ao atualizar localStorage com snapshot:', e);
+        }
       }
     }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
 

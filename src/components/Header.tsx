@@ -9,8 +9,7 @@ import {
   Clock, 
   Bell, 
   Users,
-  Building2,
-  RefreshCw
+  Building2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getDeadlineAlerts } from '../lib/planningEngine';
@@ -35,8 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
     setIsDarkMode, 
     isFirebaseConnected,
     demandas,
-    setActiveTab,
-    resetToInitialData
+    setActiveTab
   } = useApp();
 
   const [showAlerts, setShowAlerts] = useState(false);
@@ -159,19 +157,6 @@ export const Header: React.FC<HeaderProps> = ({
               title={isDarkMode ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            {/* Reset Data Button */}
-            <button
-              onClick={() => {
-                if (confirm('Deseja restaurar os dados iniciais de demonstração (15 multiplicadores, 18 células, 8 salas)?')) {
-                  resetToInitialData();
-                }
-              }}
-              className="p-1.5 text-indigo-200 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-              title="Restaurar dados de teste iniciais"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
             </button>
 
             {/* Nova Demanda Button */}
