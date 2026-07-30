@@ -19,6 +19,16 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
+interface OpInfo {
+  loginBB: string;
+  nome: string;
+  matDP: string;
+  supervisor: string;
+  gerente: string;
+  segmento: string;
+  isAtivoNoQuadro: boolean;
+}
+
 export const JornadaOperadorView: React.FC = () => {
   const { operadores, tabulador, celulas, frequenciasNotas } = useApp();
 
@@ -32,15 +42,7 @@ export const JornadaOperadorView: React.FC = () => {
 
   // Build combined list of all known operators from both Quadro (active) and Tabulador (history)
   const allOperatorsMap = useMemo(() => {
-    const map = new Map<string, {
-      loginBB: string;
-      nome: string;
-      matDP: string;
-      supervisor: string;
-      gerente: string;
-      segmento: string;
-      isAtivoNoQuadro: boolean;
-    }>();
+    const map = new Map<string, OpInfo>();
 
     // 1. Add operators from current Quadro
     operadores.forEach(op => {
@@ -82,8 +84,8 @@ export const JornadaOperadorView: React.FC = () => {
   }, [operadores, tabulador]);
 
   // Convert map to sorted array for search dropdown
-  const allOperatorsList = useMemo(() => {
-    return Array.from(allOperatorsMap.values()).sort((a, b) => a.loginBB.localeCompare(b.loginBB));
+  const allOperatorsList = useMemo<OpInfo[]>(() => {
+    return (Array.from(allOperatorsMap.values()) as OpInfo[]).sort((a, b) => a.loginBB.localeCompare(b.loginBB));
   }, [allOperatorsMap]);
 
   // Auto-select first operator if none selected
