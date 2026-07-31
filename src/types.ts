@@ -152,6 +152,12 @@ export interface AlinhamentoTabulador {
   criadoEm: string;
 }
 
+export interface PresencaDiariaItem {
+  frequencia?: string; // e.g. 'P', 'FI', 'FJ', 'DRS', 'BH', 'DAY OFF', 'FERIADO', 'TO'
+  horaExtra?: string;  // e.g. '02:00'
+  obs?: string;        // e.g. 'Operador chegou de 15:00 (20min atrasado)'
+}
+
 export interface AlunoFrequenciaNota {
   id: string;
   matDP: string;
@@ -164,6 +170,7 @@ export interface AlunoFrequenciaNota {
   notaFinal: number;
   statusAprovacao: 'Aprovado' | 'Reprovado' | 'Em Andamento';
   observacoes?: string;
+  presencaDiaria?: Record<string, PresencaDiariaItem>; // Key: YYYY-MM-DD or date index string
 }
 
 export interface ItemFrequenciaNota {
