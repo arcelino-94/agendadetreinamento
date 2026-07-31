@@ -132,11 +132,41 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
     <>
-      {/* MOBILE HORIZONTAL SCROLL NAVIGATION (Visible only on < md) */}
-      <div className="md:hidden w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1.5 shadow-2xs mb-2">
-        <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5 px-0.5">
+      {/* MOBILE NAVIGATION BAR (Visible only on < md) */}
+      <div className="md:hidden w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2 shadow-2xs mb-2 space-y-2">
+        {/* Dropdown Selector & Drawer Toggle */}
+        <div className="flex items-center space-x-2">
+          <div className="relative flex-1">
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-bold text-xs rounded-lg p-2 pr-8 appearance-none focus:outline-hidden"
+            >
+              {navItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-2 top-2.5 pointer-events-none text-slate-400">
+              ▼
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="px-2.5 py-2 bg-indigo-600 text-white rounded-lg font-bold text-xs flex items-center space-x-1 shrink-0 shadow-2xs"
+          >
+            <span>Módulos ({navItems.length})</span>
+          </button>
+        </div>
+
+        {/* Horizontal Scroll Pill Bar */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -159,6 +189,57 @@ export const Sidebar: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* MOBILE GRID MODAL (All 13 Modules) */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-2 sm:p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl p-4 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                  <span>Todas as Funcionalidades ({navItems.length})</span>
+                </h3>
+                <p className="text-xs text-slate-500">Selecione qualquer módulo do sistema</p>
+              </div>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id as any);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                      isActive
+                        ? 'bg-indigo-50 dark:bg-indigo-950/80 border-indigo-500 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`} />
+                      {item.badge}
+                    </div>
+                    <span className="text-xs font-bold leading-snug">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DESKTOP SIDEBAR (Visible on md and larger) */}
       <aside className={`hidden md:block relative transition-all duration-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shrink-0 self-start p-2 shadow-2xs ${

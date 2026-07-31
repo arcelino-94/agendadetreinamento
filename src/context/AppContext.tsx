@@ -257,14 +257,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isFirebaseConnected) return;
     const unsubscribe = subscribeToFirestore((data) => {
-      if (data) {
-        if (data.multiplicadores) setMultiplicadores(data.multiplicadores);
-        if (data.celulas) setCelulas(data.celulas);
-        if (data.salas) setSalas(data.salas);
-        if (data.demandas) setDemandas(data.demandas);
-        if (data.turmas) setTurmas(data.turmas);
-        if (data.operadores) setOperadores(data.operadores);
-        if (data.tabulador) setTabulador(data.tabulador);
+      if (data && Object.keys(data).length > 0) {
+        if (Array.isArray(data.multiplicadores)) setMultiplicadores(data.multiplicadores);
+        if (Array.isArray(data.celulas)) setCelulas(data.celulas);
+        if (Array.isArray(data.salas)) setSalas(data.salas);
+        if (Array.isArray(data.demandas)) setDemandas(data.demandas);
+        if (Array.isArray(data.turmas)) setTurmas(data.turmas);
+        if (Array.isArray(data.operadores)) setOperadores(data.operadores);
+        if (Array.isArray(data.tabulador)) setTabulador(data.tabulador);
 
         // Manter o localStorage localmente sincronizado com o snapshot da nuvem
         try {
@@ -272,18 +272,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const parsedLocal = currentLocal ? JSON.parse(currentLocal) : {};
           const merged = {
             ...parsedLocal,
-            ...(data.multiplicadores && { multiplicadores: data.multiplicadores }),
-            ...(data.celulas && { celulas: data.celulas }),
-            ...(data.salas && { salas: data.salas }),
-            ...(data.demandas && { demandas: data.demandas }),
-            ...(data.turmas && { turmas: data.turmas }),
-            ...(data.operadores && { operadores: data.operadores }),
-            ...(data.tabulador && { tabulador: data.tabulador }),
+            ...(Array.isArray(data.multiplicadores) && { multiplicadores: data.multiplicadores }),
+            ...(Array.isArray(data.celulas) && { celulas: data.celulas }),
+            ...(Array.isArray(data.salas) && { salas: data.salas }),
+            ...(Array.isArray(data.demandas) && { demandas: data.demandas }),
+            ...(Array.isArray(data.turmas) && { turmas: data.turmas }),
+            ...(Array.isArray(data.operadores) && { operadores: data.operadores }),
+            ...(Array.isArray(data.tabulador) && { tabulador: data.tabulador }),
           };
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
         } catch (e) {
           console.warn('Erro ao atualizar localStorage com snapshot:', e);
         }
+      } else {
+        // Se a nuvem estiver vazia, subir o estado inicial para o Firestore
+        saveStateToFirestore({
+          multiplicadores,
+          celulas,
+          salas,
+          demandas,
+          turmas,
+          operadores,
+          tabulador
+        });
       }
     }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
 

@@ -6,7 +6,8 @@ import {
   Clock, 
   Edit3, 
   Trash2, 
-  Award
+  Award,
+  ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Multiplicador, StatusMultiplicador } from '../types';
@@ -30,6 +31,7 @@ export const MultiplicadoresView: React.FC = () => {
   const [horarioFim, setHorarioFim] = useState('17:00');
   const [selectedEspecialidades, setSelectedEspecialidades] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusMultiplicador>('Ativo');
+  const [isCelulasDropdownOpen, setIsCelulasDropdownOpen] = useState(false);
 
   const filtered = multiplicadores.filter(m => {
     const q = searchQuery.toLowerCase();
@@ -55,6 +57,7 @@ export const MultiplicadoresView: React.FC = () => {
   };
 
   const handleOpenModal = (m?: Multiplicador) => {
+    setIsCelulasDropdownOpen(false);
     if (m) {
       setEditingMult(m);
       setNome(m.nome);
@@ -328,59 +331,90 @@ export const MultiplicadoresView: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs">
-                    Segmentos / Células de Atuação:
-                  </label>
-                  <div className="flex items-center space-x-1.5 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={selectAllCelulas}
-                      className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded hover:bg-indigo-200 text-[10px]"
-                    >
-                      + Selecionar Todas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearAllCelulas}
-                      className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium rounded hover:bg-slate-300 text-[10px]"
-                    >
-                      Limpar
-                    </button>
-                  </div>
-                </div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs mb-1">
+                  Segmentos / Células de Atuação:
+                </label>
 
-                <div className="border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 bg-slate-50 dark:bg-slate-800/50 max-h-28 overflow-y-auto">
-                  {celulas.length === 0 ? (
-                    <p className="text-[10px] text-slate-400 italic p-1">Nenhuma célula cadastrada em Células de Atendimento.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {celulas.map(c => {
-                        const isSelected = selectedEspecialidades.includes(c.nome);
-                        return (
+                {/* Menu Suspenso (Dropdown) com tamanho 11px */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsCelulasDropdownOpen(!isCelulasDropdownOpen)}
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-[11px] font-semibold text-slate-900 dark:text-white flex items-center justify-between hover:border-indigo-400 focus:outline-hidden transition-all shadow-2xs"
+                  >
+                    <span className="truncate pr-2">
+                      {selectedEspecialidades.length === 0
+                        ? 'Selecione as células...'
+                        : `${selectedEspecialidades.length} célula(s) selecionada(s) (${selectedEspecialidades.join(', ')})`}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isCelulasDropdownOpen ? 'rotate-180 text-indigo-600' : ''}`} />
+                  </button>
+
+                  {isCelulasDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          {selectedEspecialidades.length} de {celulas.length} selecionada(s)
+                        </span>
+                        <div className="flex items-center space-x-1.5">
                           <button
-                            key={c.id}
                             type="button"
-                            onClick={() => toggleEspecialidade(c.nome)}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all flex items-center space-x-0.5 leading-tight ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-indigo-400'
-                            }`}
+                            onClick={selectAllCelulas}
+                            className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 font-bold rounded text-[11px] hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
                           >
-                            <span className="text-[9px]">{isSelected ? '✓' : '+'}</span>
-                            <span>{c.nome}</span>
+                            + Selecionar Todas
                           </button>
-                        );
-                      })}
+                          <button
+                            type="button"
+                            onClick={clearAllCelulas}
+                            className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold rounded text-[11px] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                        {celulas.length === 0 ? (
+                          <p className="text-[11px] text-slate-400 italic py-2 text-center">Nenhuma célula cadastrada em Células de Atendimento.</p>
+                        ) : (
+                          celulas.map(c => {
+                            const isSelected = selectedEspecialidades.includes(c.nome);
+                            return (
+                              <div
+                                key={c.id}
+                                onClick={() => toggleEspecialidade(c.nome)}
+                                className={`flex items-center space-x-2.5 p-2 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80'
+                                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-transparent'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  readOnly
+                                  className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                />
+                                <span className="truncate">{c.nome}</span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setIsCelulasDropdownOpen(false)}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg transition-colors shadow-2xs"
+                        >
+                          Concluir
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
-                {selectedEspecialidades.length > 0 && (
-                  <p className="text-[10px] text-slate-500 mt-1 leading-tight">
-                    {selectedEspecialidades.length} célula(s) vinculada(s): <strong className="text-indigo-600 dark:text-indigo-400">{selectedEspecialidades.join(', ')}</strong>
-                  </p>
-                )}
               </div>
 
               <div>
