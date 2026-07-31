@@ -36,7 +36,131 @@ function calculateHorasTreinamento(presentes: number, chString: string): string 
   return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Helper to display first and last name for Multiplicador
+// Reusable Top Cell Multi-Select Filter
+interface TopCellMultiSelectFilterProps {
+  celulas: { id: string; nome: string }[];
+  selectedCelulas: string[];
+  onChange: (newSelected: string[]) => void;
+}
+
+const TopCellMultiSelectFilter: React.FC<TopCellMultiSelectFilterProps> = ({
+  celulas,
+  selectedCelulas,
+  onChange
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const isAllSelected = selectedCelulas.length === 0 || selectedCelulas.includes('todos');
+
+  const toggleAll = () => {
+    if (isAllSelected) {
+      onChange([]);
+    } else {
+      onChange(['todos']);
+    }
+  };
+
+  const toggleCelula = (nome: string) => {
+    if (isAllSelected) {
+      onChange([nome]);
+    } else {
+      const current = selectedCelulas.filter(c => c !== 'todos');
+      if (current.includes(nome)) {
+        const next = current.filter(c => c !== nome);
+        if (next.length === 0) {
+          onChange(['todos']);
+        } else {
+          onChange(next);
+        }
+      } else {
+        const next = [...current, nome];
+        if (next.length === celulas.length) {
+          onChange(['todos']);
+        } else {
+          onChange(next);
+        }
+      }
+    }
+  };
+
+  const buttonText = isAllSelected
+    ? `Todas Células (${celulas.length})`
+    : selectedCelulas.length === 1
+    ? selectedCelulas[0]
+    : `${selectedCelulas.length} Células Selecionadas`;
+
+  return (
+    <div className="relative inline-block w-full sm:w-52" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors"
+      >
+        <span className="truncate">{buttonText}</span>
+        <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 mt-1 z-50 w-64 bg-white dark:bg-slate-900 border-2 border-indigo-600 dark:border-indigo-500 rounded-xl shadow-2xl p-2.5 text-slate-900 dark:text-white text-xs space-y-2">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black">
+            <span className="text-indigo-900 dark:text-indigo-300 flex items-center space-x-1">
+              <Filter className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Células / Segmentos</span>
+            </span>
+            {!isAllSelected && (
+              <button
+                type="button"
+                onClick={() => onChange(['todos'])}
+                className="text-amber-600 hover:underline text-[10px] font-bold"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+            <label className="flex items-center space-x-2 text-xs font-black text-indigo-700 dark:text-indigo-300 cursor-pointer pb-1.5 border-b border-slate-200 dark:border-slate-800">
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                onChange={toggleAll}
+                className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+              />
+              <span>[ SELECIONAR TODAS AS CÉLULAS ]</span>
+            </label>
+
+            {celulas.map(c => {
+              const isChecked = !isAllSelected && selectedCelulas.includes(c.nome);
+              return (
+                <label key={c.id} className="flex items-center space-x-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleCelula(c.nome)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                  />
+                  <span>{c.nome}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 function formatShortName(fullName: string): string {
   if (!fullName) return '';
   const parts = fullName.trim().split(/\s+/);
@@ -138,20 +262,20 @@ const ExcelMultiSelectFilter: React.FC<ExcelMultiSelectFilterProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full text-left text-[10px] font-extrabold uppercase px-2 py-1.5 rounded flex items-center justify-between space-x-1 border transition-all ${
+        className={`w-full text-center text-[9px] font-extrabold uppercase px-0.5 py-1 rounded flex flex-col items-center justify-center border transition-all ${
           isFiltered || isNoneSelected
             ? 'bg-amber-100 text-amber-950 border-amber-400 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-600 shadow-xs'
             : 'bg-slate-800 text-slate-100 border-slate-700 hover:bg-slate-700'
         }`}
       >
-        <span className="truncate">{label}</span>
-        <div className="flex items-center space-x-1 shrink-0">
+        <span className="whitespace-normal break-words leading-tight text-center block w-full">{label}</span>
+        <div className="flex items-center space-x-0.5 shrink-0 mt-0.5">
           {(isFiltered || isNoneSelected) && (
-            <span className="bg-amber-500 text-slate-950 px-1 py-0.2 rounded text-[9px] font-black">
+            <span className="bg-amber-500 text-slate-950 px-0.5 py-0.2 rounded text-[8px] font-black">
               {isNoneSelected ? 0 : selectedValues.length}
             </span>
           )}
-          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''} ${isFiltered || isNoneSelected ? 'text-amber-600 dark:text-amber-300' : 'text-slate-300'}`} />
+          <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isOpen ? 'rotate-180' : ''} ${isFiltered || isNoneSelected ? 'text-amber-600 dark:text-amber-300' : 'text-slate-300'}`} />
         </div>
       </button>
 
@@ -259,7 +383,7 @@ export const TabuladorView: React.FC = () => {
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCelula, setSelectedCelula] = useState('todos');
+  const [selectedCelulasTop, setSelectedCelulasTop] = useState<string[]>(['todos']);
 
   // Main Tabulador Table Column Multi-Select Filters
   const [tabFilterTreinamento, setTabFilterTreinamento] = useState<string[]>([]);
@@ -363,7 +487,9 @@ export const TabuladorView: React.FC = () => {
         solicitanteStr.includes(q) ||
         celulaStr.includes(q);
 
-      const matchCelula = selectedCelula === 'todos' || celulaStr.includes(selectedCelula.toLowerCase());
+      const matchCelula = selectedCelulasTop.length === 0 || 
+        selectedCelulasTop.includes('todos') || 
+        selectedCelulasTop.some(c => celulaStr.includes(c.toLowerCase()));
 
       // Date parsing for month and year picklists
       let itemMonth = '';
@@ -404,7 +530,7 @@ export const TabuladorView: React.FC = () => {
   }, [
     tabulador, 
     searchTerm, 
-    selectedCelula, 
+    selectedCelulasTop, 
     selectedMonthNum, 
     selectedYear,
     tabFilterTreinamento, 
@@ -599,8 +725,8 @@ export const TabuladorView: React.FC = () => {
     setBulkIncludeItem(item);
     setBulkLoginsText('');
     setBulkData(item.data || new Date().toISOString().split('T')[0]);
-    const activeMults = multiplicadores.filter(m => m.status === 'Ativo');
-    setBulkMultiplicador(activeMults[0]?.nome || 'Sem Multiplicador');
+    const activeMult = multiplicadores.find(m => m.status !== 'Ausente');
+    setBulkMultiplicador(activeMult ? activeMult.nome : 'Sem Multiplicador');
     setBulkHora('09:00');
     setBulkLocal('Ilha Operacional');
     setBulkStatus('Pendente');
@@ -618,33 +744,63 @@ export const TabuladorView: React.FC = () => {
 
     const existingOps = bulkIncludeItem.operadores || [];
     const newOps: OperadorAlinhamento[] = [...existingOps];
+    const alreadyTabulated: string[] = [];
 
     logins.forEach(login => {
-      const opQuadro = getOperadorByLogin(login);
-      // Check existing entry for same login if updating
-      const index = newOps.findIndex(o => o.loginBB.toUpperCase() === login);
-      
-      const newOpEntry: OperadorAlinhamento = {
-        loginBB: login,
-        nome: opQuadro ? opQuadro.nome : 'login não localizado no quadro',
-        matDP: opQuadro ? opQuadro.matDP : (index >= 0 ? newOps[index].matDP : 'N/A'),
-        supervisor: opQuadro ? opQuadro.supervisor : (index >= 0 ? newOps[index].supervisor : 'N/A'),
-        gerente: opQuadro ? opQuadro.gerente : (index >= 0 ? newOps[index].gerente : 'N/A'),
-        segmento: opQuadro ? opQuadro.segmento : (index >= 0 ? newOps[index].segmento : bulkIncludeItem.celula),
-        dataPresenca: bulkData,
-        horario: bulkHora,
-        multiplicador: bulkMultiplicador || 'Sem Multiplicador',
-        local: bulkLocal,
-        statusPresenca: bulkStatus,
-        tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
-      };
+      // Find matching operator in existing list by loginBB, matDP or nome
+      const index = newOps.findIndex(o => 
+        (o.loginBB && o.loginBB.toUpperCase() === login) ||
+        (o.matDP && o.matDP.toUpperCase() === login) ||
+        (o.nome && o.nome.toUpperCase() === login)
+      );
 
       if (index >= 0) {
-        newOps[index] = newOpEntry;
+        const existingOp = newOps[index];
+        // Check if operator is already fully tabulated / completed
+        const isFullyTabulated = 
+          existingOp.statusPresenca === 'Presente' || 
+          existingOp.statusPresenca === 'Dispensado' || 
+          (existingOp.dataPresenca && existingOp.horario && existingOp.multiplicador && existingOp.statusPresenca !== 'Pendente');
+
+        if (isFullyTabulated) {
+          // Do NOT overwrite! Record name for alert notification
+          alreadyTabulated.push(existingOp.nome || existingOp.loginBB || login);
+        } else {
+          // Fill in attendance details for this existing pending operator while preserving Quadro metadata
+          newOps[index] = {
+            ...existingOp,
+            dataPresenca: bulkData,
+            horario: bulkHora,
+            multiplicador: bulkMultiplicador || 'Sem Multiplicador',
+            local: bulkLocal,
+            statusPresenca: bulkStatus,
+            tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
+          };
+        }
       } else {
+        // Operator NOT in tabulador yet -> Look up in Quadro
+        const opQuadro = getOperadorByLogin(login);
+        const newOpEntry: OperadorAlinhamento = {
+          loginBB: opQuadro ? opQuadro.loginBB : login,
+          nome: opQuadro ? opQuadro.nome : 'login não localizado no quadro',
+          matDP: opQuadro ? opQuadro.matDP : 'N/A',
+          supervisor: opQuadro ? opQuadro.supervisor : 'N/A',
+          gerente: opQuadro ? opQuadro.gerente : 'N/A',
+          segmento: opQuadro ? opQuadro.segmento : bulkIncludeItem.celula,
+          dataPresenca: bulkData,
+          horario: bulkHora,
+          multiplicador: bulkMultiplicador || 'Sem Multiplicador',
+          local: bulkLocal,
+          statusPresenca: bulkStatus,
+          tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
+        };
         newOps.push(newOpEntry);
       }
     });
+
+    if (alreadyTabulated.length > 0) {
+      alert(`Aviso:\nOs seguintes operadores já estão totalmente tabulados e NÃO foram sobrescritos:\n\n• ${alreadyTabulated.join('\n• ')}`);
+    }
 
     const newConvocados = newOps.length;
     const newPresentes = newOps.filter(o => o.statusPresenca === 'Presente').length;
@@ -839,26 +995,21 @@ export const TabuladorView: React.FC = () => {
               className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 font-normal uppercase"
             >
               <option value="todos">TODOS OS ANOS</option>
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
+              <option value="2023">2023</option>
               <option value="2024">2024</option>
-              <option value="2027">2027</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
             </select>
           </div>
 
-          {/* Cell filter */}
+          {/* Cell filter with checkboxes */}
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Célula:</span>
-            <select
-              value={selectedCelula}
-              onChange={(e) => setSelectedCelula(e.target.value)}
-              className="w-full sm:w-44 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
-            >
-              <option value="todos">Todas Células ({tabulador.length})</option>
-              {celulas.map(c => (
-                <option key={c.id} value={c.nome}>{c.nome}</option>
-              ))}
-            </select>
+            <TopCellMultiSelectFilter
+              celulas={celulas}
+              selectedCelulas={selectedCelulasTop}
+              onChange={setSelectedCelulasTop}
+            />
           </div>
         </div>
 
@@ -879,8 +1030,8 @@ export const TabuladorView: React.FC = () => {
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left border-collapse font-sans text-[11px]">
             <thead>
-              <tr className="bg-indigo-900 dark:bg-slate-950 text-white text-[10px] font-black uppercase tracking-wider border-b-2 border-yellow-400">
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+              <tr className="bg-indigo-900 dark:bg-slate-950 text-white text-[9px] font-black uppercase tracking-wider border-b-2 border-yellow-400">
+                <th className="px-1.5 py-1 border-r border-indigo-800/80">
                   <ExcelMultiSelectFilter
                     label="Treinamento"
                     options={optionsTabTreinamento}
@@ -888,7 +1039,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterTreinamento}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="px-1 py-1 border-r border-indigo-800/80 w-28 text-left">
                   <ExcelMultiSelectFilter
                     label="Solicitante"
                     options={optionsTabSolicitante}
@@ -896,7 +1047,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterSolicitante}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="px-1 py-1 border-r border-indigo-800/80 w-28 text-left">
                   <ExcelMultiSelectFilter
                     label="Célula"
                     options={optionsTabCelula}
@@ -904,39 +1055,39 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterCelula}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-12 text-center">
                   <ExcelMultiSelectFilter
-                    label="Convocados"
+                    label="Convoc."
                     options={optionsTabConvocados}
                     selectedValues={tabFilterConvocados}
                     onChange={setTabFilterConvocados}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-12 text-center">
                   <ExcelMultiSelectFilter
-                    label="Presentes"
+                    label="Present."
                     options={optionsTabPresentes}
                     selectedValues={tabFilterPresentes}
                     onChange={setTabFilterPresentes}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-12 text-center">
                   <ExcelMultiSelectFilter
-                    label="Dispensado"
+                    label="Dispens."
                     options={optionsTabDispensado}
                     selectedValues={tabFilterDispensado}
                     onChange={setTabFilterDispensado}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-12 text-center">
                   <ExcelMultiSelectFilter
-                    label="Pendentes"
+                    label="Pendent."
                     options={optionsTabPendentes}
                     selectedValues={tabFilterPendentes}
                     onChange={setTabFilterPendentes}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-16 text-center">
                   <ExcelMultiSelectFilter
                     label="Horas Trein."
                     options={optionsTabHorasTrein}
@@ -944,7 +1095,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterHorasTrein}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-12 text-center">
                   <ExcelMultiSelectFilter
                     label="CH"
                     options={optionsTabCH}
@@ -952,7 +1103,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterCH}
                   />
                 </th>
-                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                <th className="p-0.5 border-r border-indigo-800/80 w-12 text-center">
                   <ExcelMultiSelectFilter
                     label="%"
                     options={optionsTabPercentual}
@@ -960,11 +1111,11 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterPercentual}
                   />
                 </th>
-                <th className="px-2 py-1.5 text-center shrink-0 font-extrabold uppercase">AÇÕES</th>
+                <th className="px-1 py-1 text-center font-extrabold uppercase w-24">AÇÕES</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-[11px] font-medium">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-[10px] font-medium">
               {filteredTabulador.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
@@ -982,62 +1133,62 @@ export const TabuladorView: React.FC = () => {
                       className={`${rowBg} hover:bg-indigo-50/50 dark:hover:bg-slate-800/80 transition-colors border-b border-slate-200/80 dark:border-slate-800 text-[10px] font-normal`}
                     >
                       {/* TREINAMENTO - CLICKABLE TO OPEN DEDICATED FULL TABLE */}
-                      <td className="px-2.5 py-1.5 font-normal border-r border-slate-200 dark:border-slate-800">
+                      <td className="px-2 py-1.5 font-normal border-r border-slate-200 dark:border-slate-800 text-left">
                         <button
                           onClick={() => setViewingFullAlignment(item)}
-                          className="flex items-center space-x-1.5 text-left text-indigo-900 dark:text-indigo-200 hover:text-indigo-600 dark:hover:text-indigo-400 group transition-colors"
+                          className="flex items-center space-x-1 text-left text-indigo-900 dark:text-indigo-200 hover:text-indigo-600 dark:hover:text-indigo-400 group transition-colors"
                           title="Clique para abrir a Tabela Completa de Operadores com Filtros Excel"
                         >
-                          <span className="w-1.5 h-5 bg-indigo-600 group-hover:bg-amber-500 rounded-full shrink-0 transition-colors"></span>
-                          <span className="uppercase group-hover:underline font-normal text-[10.5px] break-words">{item.treinamento}</span>
+                          <span className="w-1.5 h-4 bg-indigo-600 group-hover:bg-amber-500 rounded-full shrink-0 transition-colors"></span>
+                          <span className="uppercase group-hover:underline font-bold text-[10px] leading-tight break-words">{item.treinamento}</span>
                         </button>
                       </td>
 
                       {/* SOLICITANTE */}
-                      <td className="px-2 py-1.5 text-slate-600 dark:text-slate-300 font-normal border-r border-slate-200 dark:border-slate-800 uppercase whitespace-nowrap">
+                      <td className="px-1.5 py-1.5 text-slate-600 dark:text-slate-300 font-normal border-r border-slate-200 dark:border-slate-800 uppercase text-[9.5px] leading-tight w-28 text-left">
                         {item.solicitante || 'OPERAÇÃO / T&D/BB'}
                       </td>
 
                       {/* CELULA */}
-                      <td className="px-2 py-1.5 border-r border-slate-200 dark:border-slate-800">
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[9.5px] font-normal bg-indigo-50 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase whitespace-nowrap">
+                      <td className="px-1.5 py-1.5 border-r border-slate-200 dark:border-slate-800 w-28 text-left">
+                        <span className="inline-block px-1 py-0.5 rounded text-[9px] font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase leading-tight break-words">
                           {item.celula}
                         </span>
                       </td>
 
                       {/* CONVOCADOS */}
-                      <td className="px-2 py-1.5 text-center font-normal text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                      <td className="p-0.5 text-center font-bold text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800 w-12">
                         {item.convocados}
                       </td>
 
                       {/* PRESENTES */}
-                      <td className="px-2 py-1.5 text-center font-normal text-emerald-700 dark:text-emerald-400 border-r border-slate-200 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20">
+                      <td className="p-0.5 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-200 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20 w-12">
                         {item.presentes}
                       </td>
 
                       {/* DISPENSADO */}
-                      <td className="px-2 py-1.5 text-center font-normal text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800">
+                      <td className="p-0.5 text-center font-bold text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 w-12">
                         {item.dispensado}
                       </td>
 
                       {/* PENDENTES */}
-                      <td className="px-2 py-1.5 text-center font-normal text-amber-700 dark:text-amber-400 border-r border-slate-200 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/20">
+                      <td className="p-0.5 text-center font-bold text-amber-700 dark:text-amber-400 border-r border-slate-200 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/20 w-12">
                         {item.pendentes}
                       </td>
 
                       {/* HORAS TREIN. */}
-                      <td className="px-2 py-1.5 text-center font-mono font-normal text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
+                      <td className="p-0.5 text-center font-mono font-medium text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 w-16 text-[9.5px]">
                         {item.horasTreinamento}
                       </td>
 
                       {/* CH */}
-                      <td className="px-2 py-1.5 text-center font-mono font-normal text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
+                      <td className="p-0.5 text-center font-mono font-medium text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 w-12 text-[9.5px]">
                         {item.cargaHoraria}
                       </td>
 
                       {/* % ADERÊNCIA WITH STATUS ICON */}
-                      <td className="px-2 py-1.5 text-center border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
-                        <div className="flex items-center justify-center space-x-1 font-bold">
+                      <td className="p-0.5 text-center border-r border-slate-200 dark:border-slate-800 w-12 text-[9.5px]">
+                        <div className="flex items-center justify-center space-x-0.5 font-bold">
                           {renderPercentIcon(item.percentual)}
                           <span className={item.percentual >= 80 ? 'text-emerald-700 dark:text-emerald-400' : item.percentual >= 50 ? 'text-amber-700 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}>
                             {item.percentual}%
@@ -1046,7 +1197,7 @@ export const TabuladorView: React.FC = () => {
                       </td>
 
                       {/* AÇÕES (INCLUIR EM MASSA BUTTON) */}
-                      <td className="px-2 py-2.5 text-center">
+                      <td className="px-1 py-1.5 text-center w-24">
                         <div className="flex items-center justify-center space-x-1">
                           <button
                             onClick={() => handleOpenBulkInclude(item)}
@@ -1160,7 +1311,7 @@ export const TabuladorView: React.FC = () => {
                 <table className="w-full text-left border-collapse text-[10px] whitespace-nowrap">
                   <thead>
                     <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase border-b border-slate-700">
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-28">
                         <ExcelMultiSelectFilter
                           label="MATRÍCULA DP"
                           options={optionsMatDP}
@@ -1168,7 +1319,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterMatDP}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-28">
                         <ExcelMultiSelectFilter
                           label="LOGIN BB"
                           options={optionsLogin}
@@ -1176,7 +1327,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterLogin}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 min-w-[180px]">
                         <ExcelMultiSelectFilter
                           label="NOME OPERADOR"
                           options={optionsNome}
@@ -1184,7 +1335,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterNome}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-36">
                         <ExcelMultiSelectFilter
                           label="SUPERVISOR"
                           options={optionsSupervisor}
@@ -1192,7 +1343,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterSupervisor}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-32">
                         <ExcelMultiSelectFilter
                           label="GERENTE"
                           options={optionsGerente}
@@ -1200,7 +1351,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterGerente}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-28">
                         <ExcelMultiSelectFilter
                           label="SEGMENTO"
                           options={optionsSegmento}
@@ -1208,7 +1359,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterSegmento}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-36">
                         <ExcelMultiSelectFilter
                           label="MULTIPLICADOR"
                           options={optionsMultiplicador}
@@ -1216,7 +1367,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterMultiplicador}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-28">
                         <ExcelMultiSelectFilter
                           label="LOCAL"
                           options={optionsLocal}
@@ -1224,7 +1375,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterLocal}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-24">
                         <ExcelMultiSelectFilter
                           label="DATA"
                           options={optionsData}
@@ -1232,7 +1383,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterData}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700">
+                      <th className="p-1.5 border-r border-slate-700 w-20">
                         <ExcelMultiSelectFilter
                           label="HORA"
                           options={optionsHora}
@@ -1240,7 +1391,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterHora}
                         />
                       </th>
-                      <th className="p-1.5 text-center">
+                      <th className="p-1.5 text-center w-36">
                         <ExcelMultiSelectFilter
                           label="STATUS PRESENÇA"
                           options={optionsStatus}
@@ -1271,37 +1422,37 @@ export const TabuladorView: React.FC = () => {
 
                         return (
                           <tr key={`${displayLogin}-${idx}`} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60">
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-slate-600 dark:text-slate-300">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-slate-600 dark:text-slate-300 w-28">
                               {displayMat || 'N/A'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-700 dark:text-indigo-400 w-28">
                               {displayLogin || 'N/A'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-normal text-slate-900 dark:text-white">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-normal text-slate-900 dark:text-white min-w-[180px]">
                               {op.nome}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 w-36">
                               {op.supervisor || 'N/A'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-500">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-500 w-32">
                               {op.gerente || 'N/A'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600 w-28">
                               {op.segmento || viewingFullAlignment.celula}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-normal text-indigo-800 dark:text-indigo-300 whitespace-nowrap">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-normal text-indigo-800 dark:text-indigo-300 whitespace-nowrap w-36">
                               {formatShortName(op.multiplicador || 'T&D/BB')}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 w-28">
                               {op.local || 'Ilha Operacional'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px] whitespace-nowrap">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px] whitespace-nowrap w-24">
                               {op.dataPresenca || viewingFullAlignment.data}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px] whitespace-nowrap">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px] whitespace-nowrap w-20">
                               {op.horario || 'N/A'}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center w-36">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                 op.statusPresenca === 'Presente' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
                                 op.statusPresenca === 'Dispensado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
@@ -1417,8 +1568,10 @@ export const TabuladorView: React.FC = () => {
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
                   >
                     <option value="Sem Multiplicador">Sem Multiplicador</option>
-                    {multiplicadores.filter(m => m.status === 'Ativo').map(m => (
-                      <option key={m.id} value={m.nome}>{m.nome}</option>
+                    {multiplicadores.map(m => (
+                      <option key={m.id} value={m.nome}>
+                        {formatShortName(m.nome)} {m.status !== 'Ativo' ? `(${m.status})` : ''}
+                      </option>
                     ))}
                     <option value="T&D / SUPORTE">T&D / SUPORTE GENERALISTA</option>
                   </select>
@@ -1557,21 +1710,66 @@ export const TabuladorView: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Célula / Segmento Alvo:</label>
-                  <div className="relative">
-                    <select
-                      value={formData.celula}
-                      onChange={(e) => setFormData({ ...formData, celula: e.target.value })}
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white text-xs"
-                    >
-                      <option value="TODAS AS CÉLULAS">TODAS AS CÉLULAS</option>
-                      {celulas.map(c => (
-                        <option key={c.id} value={c.nome}>{c.nome}</option>
-                      ))}
-                    </select>
-                  </div>
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Células / Segmentos Alvo (Selecione uma, várias ou todas):
+                </label>
+                <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 max-h-36 overflow-y-auto space-y-1.5">
+                  <label className="flex items-center space-x-2 text-xs font-black text-indigo-700 dark:text-indigo-300 cursor-pointer pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={formData.celula === 'TODAS AS CÉLULAS'}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData({ ...formData, celula: 'TODAS AS CÉLULAS' });
+                        } else {
+                          setFormData({ ...formData, celula: celulas[0]?.nome || '' });
+                        }
+                      }}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                    />
+                    <span>[ SELECIONAR TODAS AS CÉLULAS ]</span>
+                  </label>
+
+                  {celulas.map(c => {
+                    const selectedList = formData.celula.split(',').map(s => s.trim());
+                    const isChecked = formData.celula !== 'TODAS AS CÉLULAS' && selectedList.includes(c.nome);
+
+                    return (
+                      <label key={c.id} className="flex items-center space-x-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (formData.celula === 'TODAS AS CÉLULAS') {
+                              if (e.target.checked) {
+                                setFormData({ ...formData, celula: c.nome });
+                              }
+                            } else {
+                              let current = selectedList.filter(s => s && s !== 'TODAS AS CÉLULAS');
+                              if (e.target.checked) {
+                                current.push(c.nome);
+                              } else {
+                                current = current.filter(s => s !== c.nome);
+                              }
+                              if (current.length === 0 || current.length === celulas.length) {
+                                setFormData({ ...formData, celula: 'TODAS AS CÉLULAS' });
+                              } else {
+                                setFormData({ ...formData, celula: current.join(', ') });
+                              }
+                            }
+                          }}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                        />
+                        <span>{c.nome}</span>
+                      </label>
+                    );
+                  })}
                 </div>
+                <p className="text-[10.5px] text-slate-500 mt-1">
+                  Selecionado: <strong className="text-indigo-600 dark:text-indigo-400">{formData.celula || 'Nenhuma'}</strong>
+                </p>
+              </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

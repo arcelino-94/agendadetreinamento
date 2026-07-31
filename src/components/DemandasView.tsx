@@ -153,6 +153,8 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
             <option value="Sinergia">Sinergia</option>
             <option value="Alinhamento">Alinhamento</option>
             <option value="Novatos">Novatos</option>
+            <option value="Migração">Migração</option>
+            <option value="Retorno LMG">Retorno LMG</option>
           </select>
 
           <select

@@ -3,6 +3,13 @@ import { X, Calendar, Clock, AlertTriangle, Building2, Users, CheckCircle } from
 import { useApp } from '../context/AppContext';
 import { TipoDemanda, Turma } from '../types';
 
+function formatShortName(fullName: string): string {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
 interface NovaTurmaModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -264,10 +271,10 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
               >
                 {multiplicadores
-                  .filter(m => (m.status !== 'Ausente' && m.status !== 'Férias') || m.id === multiplicadorId)
+                  .filter(m => m.status !== 'Ausente' || m.id === multiplicadorId)
                   .map(m => (
                     <option key={m.id} value={m.id}>
-                      {m.nome}
+                      {formatShortName(m.nome)}
                     </option>
                   ))}
               </select>

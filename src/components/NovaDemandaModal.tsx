@@ -3,6 +3,13 @@ import { X, FileText, Clock, AlertCircle, CheckSquare, Square } from 'lucide-rea
 import { useApp } from '../context/AppContext';
 import { Demanda, Prioridade, TipoDemanda } from '../types';
 
+function formatShortName(fullName: string): string {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
 interface NovaDemandaModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -31,7 +38,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
   const [duracaoValor, setDuracaoValor] = useState(20);
   const [duracaoUnidade, setDuracaoUnidade] = useState<'minutos' | 'horas' | 'dias'>('minutos');
 
-  // Novos campos para NOVATOS, Migração, Sinergia
+  // Novos campos para NOVATOS, Migração, Sinergia e Retorno LMG
   const [dataInicio, setDataInicio] = useState(() => new Date().toISOString().split('T')[0]);
   const [dataFim, setDataFim] = useState(() => {
     const d = new Date(Date.now() + 7 * 86400000);
@@ -42,7 +49,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
   const [listaOperadoresText, setListaOperadoresText] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  const isPeriodoType = tipo === 'Novatos' || tipo === 'Migração' || tipo === 'Sinergia';
+  const isPeriodoType = tipo === 'Novatos' || tipo === 'Migração' || tipo === 'Sinergia' || tipo === 'Retorno LMG';
 
   useEffect(() => {
     if (initialDemanda) {
@@ -196,7 +203,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
     // Route based on demand type
     if (tipo === 'Alinhamento' || tipo === 'Reciclagem') {
       setActiveTab('tabulador');
-    } else if (tipo === 'Sinergia' || tipo === 'Migração' || tipo === 'Novatos') {
+    } else if (tipo === 'Sinergia' || tipo === 'Migração' || tipo === 'Novatos' || tipo === 'Retorno LMG') {
       setActiveTab('frequencias');
     }
   };
@@ -337,11 +344,13 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
                 >
                   <option value="">Selecione o Multiplicador...</option>
-                  {multiplicadores.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.nome} ({m.status})
-                    </option>
-                  ))}
+                  {multiplicadores
+                    .filter(m => m.status !== 'Ausente')
+                    .map(m => (
+                      <option key={m.id} value={m.id}>
+                        {formatShortName(m.nome)}
+                      </option>
+                    ))}
                 </select>
               </div>
             </div>

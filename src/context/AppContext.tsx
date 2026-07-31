@@ -7,6 +7,7 @@ import {
   Turma, 
   FirebaseConfigCustom,
   OperadorQuadro,
+  OperadorAlinhamento,
   AlinhamentoTabulador
 } from '../types';
 import { 
@@ -455,28 +456,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const nextDemandas = [newDemanda, ...demandas];
 
-    // Auto create tabulador entry for new demand
-    const convocados = demandaData.qtdOperadores || 0;
+    // Auto create tabulador entry for new demand, pulling data from quadroOperadores
+    const parsedLogins = demandaData.listaOperadores || [];
+    const ops: OperadorAlinhamento[] = parsedLogins.map(item => {
+      const cleanStr = item.trim().toUpperCase();
+      const q = operadores.find(op => 
+        op.loginBB.toUpperCase() === cleanStr || 
+        op.matDP.toUpperCase() === cleanStr || 
+        op.nome.toUpperCase().includes(cleanStr)
+      );
+      return {
+        loginBB: q ? q.loginBB : (cleanStr || 'N/A'),
+        nome: q ? q.nome : item,
+        matDP: q ? q.matDP : 'N/A',
+        supervisor: q ? q.supervisor : (demandaData.supervisor || 'N/A'),
+        gerente: q ? q.gerente : 'N/A',
+        segmento: q ? q.segmento : (demandaData.celulaNome || 'SAC PRIORITÁRIO'),
+        statusPresenca: 'Pendente'
+      };
+    });
+
+    const convocados = ops.length || (demandaData.qtdOperadores || 0);
     const newTabuladorItem: AlinhamentoTabulador = {
       id: `TAB-${newId}`,
       treinamento: demandaData.tema || 'TREINAMENTO SEM TÍTULO',
       solicitante: `OPERAÇÃO (${demandaData.supervisor || 'T&D/BB'})`,
       celula: demandaData.celulaNome || 'SAC PRIORITÁRIO',
       convocados,
-      presentes: convocados,
+      presentes: 0,
       dispensado: 0,
-      pendentes: 0,
-      horasTreinamento: '0:20:00',
+      pendentes: convocados,
+      horasTreinamento: '0:00:00',
       cargaHoraria: '0:20:00',
-      percentual: 100,
+      percentual: 0,
       data: demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
-      operadores: (demandaData.listaOperadores || []).map(opName => ({
-        loginBB: 'N/A',
-        nome: opName,
-        statusPresenca: 'Presente'
-      })),
+      operadores: ops,
       observacoes: demandaData.observacoes || '',
-      status: 'Concluído',
+      status: 'Pendente',
       criadoEm: new Date().toISOString()
     };
 

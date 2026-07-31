@@ -170,11 +170,45 @@ export const FrequenciasNotasView: React.FC = () => {
 
   // Edit student grades in active course modal
   const [editingAlunos, setEditingAlunos] = useState<AlunoFrequenciaNota[]>([]);
-  const [newLoginInput, setNewLoginInput] = useState('');
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ matDP: string; loginBB: string; nome: string }>({
+    matDP: '',
+    loginBB: '',
+    nome: ''
+  });
 
   const handleOpenCourseDetails = (course: ItemFrequenciaNota) => {
     setActiveCourse(course);
     setEditingAlunos([...course.alunos]);
+    setEditingRowId(null);
+  };
+
+  const handleStartEditRow = (aluno: AlunoFrequenciaNota) => {
+    setEditingRowId(aluno.id);
+    setEditDraft({
+      matDP: aluno.matDP || '',
+      loginBB: aluno.loginBB || '',
+      nome: aluno.nome || ''
+    });
+  };
+
+  const handleSaveRow = (id: string) => {
+    setEditingAlunos(prev => prev.map(a => {
+      if (a.id === id) {
+        return {
+          ...a,
+          matDP: editDraft.matDP,
+          loginBB: editDraft.loginBB,
+          nome: editDraft.nome
+        };
+      }
+      return a;
+    }));
+    setEditingRowId(null);
+  };
+
+  const handleCancelRowEdit = () => {
+    setEditingRowId(null);
   };
 
   const handleUpdateStudent = (id: string, field: keyof AlunoFrequenciaNota, val: any) => {
@@ -195,40 +229,6 @@ export const FrequenciasNotasView: React.FC = () => {
       }
       return a;
     }));
-  };
-
-  const handleAddStudentByLogin = () => {
-    if (!newLoginInput.trim()) return;
-    const logins = newLoginInput.split(/[\s,;\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
-    
-    // Existing logins / matDP set to prevent overwriting existing data
-    const existingKeys = new Set(
-      editingAlunos.flatMap(a => [a.loginBB.toUpperCase(), a.matDP.toUpperCase()])
-    );
-
-    const newStudents: AlunoFrequenciaNota[] = [];
-    logins.forEach(login => {
-      // Prevent overwriting data that was already logged previously
-      if (existingKeys.has(login)) return;
-
-      const op = operadores.find(o => o.loginBB.toUpperCase() === login || o.matDP === login);
-      newStudents.push({
-        id: `aln-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        matDP: op ? op.matDP : 'N/A',
-        loginBB: login,
-        nome: op ? op.nome : `OPERADOR ${login}`,
-        supervisor: op ? op.supervisor : 'N/A',
-        gerente: op ? op.gerente : 'N/A',
-        celula: op ? op.segmento : 'GERAL',
-        frequenciaPercent: 100,
-        notaFinal: 80,
-        statusAprovacao: 'Aprovado'
-      });
-      existingKeys.add(login);
-    });
-
-    setEditingAlunos(prev => [...prev, ...newStudents]);
-    setNewLoginInput('');
   };
 
   // Handler for Lançar Presença with Regra do TO
@@ -608,50 +608,24 @@ export const FrequenciasNotasView: React.FC = () => {
               </div>
             </div>
 
-            {/* ADD OPERATOR INPUT IN BULK */}
-            <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-                Adicionar Operadores por Login ou Matrícula (Importação sem Sobrescrever):
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="Cole logins ex: C1315137 C1286562 C1274287"
-                  value={newLoginInput}
-                  onChange={(e) => setNewLoginInput(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddStudentByLogin}
-                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors"
-                >
-                  Importar
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400">
-                * Dica: Duplo clique na célula de Frequência ou Nota Final permite editar e salva automaticamente.
-              </p>
-            </div>
-
-            {/* STUDENTS LIST TABLE (WITHOUT CÉLULA COLUMN, REDUCED HEIGHT, NO BOLD) */}
+            {/* STUDENTS LIST TABLE */}
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto min-h-[250px]">
               <table className="w-full text-left text-[10px] whitespace-nowrap">
                 <thead className="bg-slate-800 text-white font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="p-1.5 border-r border-slate-700">MATRÍCULA DP</th>
-                    <th className="p-1.5 border-r border-slate-700">LOGIN BB</th>
-                    <th className="p-1.5 border-r border-slate-700">NOME OPERADOR</th>
-                    <th className="p-1.5 border-r border-slate-700">SUPERVISOR</th>
-                    <th className="p-1.5 border-r border-slate-700">GERENTE</th>
-                    <th className="p-1.5 text-center border-r border-slate-700">FREQUÊNCIA (%)</th>
-                    <th className="p-1.5 text-center border-r border-slate-700">MÉDIA DAS NOTAS (0-100)</th>
-                    <th className="p-1.5 text-center border-r border-slate-700">STATUS APROVAÇÃO</th>
-                    <th className="p-1.5 text-right">AÇÃO</th>
+                    <th className="p-1.5 border-r border-slate-700 w-32">MATRÍCULA DP</th>
+                    <th className="p-1.5 border-r border-slate-700 w-32">LOGIN BB</th>
+                    <th className="p-1.5 border-r border-slate-700 min-w-[200px]">NOME OPERADOR</th>
+                    <th className="p-1.5 text-center border-r border-slate-700 w-28">FREQUÊNCIA (%)</th>
+                    <th className="p-1.5 text-center border-r border-slate-700 w-36">MÉDIA DAS NOTAS (0-100)</th>
+                    <th className="p-1.5 text-center border-r border-slate-700 w-28">STATUS APROVAÇÃO</th>
+                    <th className="p-1.5 text-center w-28">AÇÃO</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-normal">
                   {editingAlunos.map((aluno) => {
+                    const isEditing = editingRowId === aluno.id;
+
                     let displayLogin = aluno.loginBB || '';
                     let displayMat = aluno.matDP || '';
                     if (displayMat.toUpperCase().startsWith('C') && !displayLogin.toUpperCase().startsWith('C')) {
@@ -662,21 +636,58 @@ export const FrequenciasNotasView: React.FC = () => {
 
                     return (
                       <tr key={aluno.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/50">
-                        <td className="p-1.5 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
-                          {displayMat || 'N/A'}
+                        {/* MATRÍCULA DP */}
+                        <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft.matDP}
+                              onChange={(e) => setEditDraft(prev => ({ ...prev, matDP: e.target.value }))}
+                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              placeholder="Matrícula DP"
+                            />
+                          ) : (
+                            <span className="font-mono text-slate-600 dark:text-slate-400">
+                              {displayMat || 'N/A'}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-1.5 font-mono font-normal text-indigo-700 dark:text-indigo-400 border-r border-slate-100 dark:border-slate-800">
-                          {displayLogin || 'N/A'}
+
+                        {/* LOGIN BB */}
+                        <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft.loginBB}
+                              onChange={(e) => setEditDraft(prev => ({ ...prev, loginBB: e.target.value }))}
+                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 font-mono text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              placeholder="Login BB"
+                            />
+                          ) : (
+                            <span className="font-mono font-normal text-indigo-700 dark:text-indigo-400">
+                              {displayLogin || 'N/A'}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-1.5 font-normal text-slate-900 dark:text-white border-r border-slate-100 dark:border-slate-800">
-                          {aluno.nome}
+
+                        {/* NOME OPERADOR */}
+                        <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft.nome}
+                              onChange={(e) => setEditDraft(prev => ({ ...prev, nome: e.target.value }))}
+                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              placeholder="Nome do Operador"
+                            />
+                          ) : (
+                            <span className="font-normal text-slate-900 dark:text-white">
+                              {aluno.nome}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-1.5 text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
-                          {aluno.supervisor || 'N/A'}
-                        </td>
-                        <td className="p-1.5 text-slate-500 border-r border-slate-100 dark:border-slate-800">
-                          {aluno.gerente || 'N/A'}
-                        </td>
+
+                        {/* FREQUÊNCIA (%) */}
                         <td 
                           className="p-1 text-center border-r border-slate-100 dark:border-slate-800 cursor-pointer"
                           onDoubleClick={() => {
@@ -691,6 +702,8 @@ export const FrequenciasNotasView: React.FC = () => {
                             {aluno.frequenciaPercent}%
                           </span>
                         </td>
+
+                        {/* MÉDIA DAS NOTAS (0-100) */}
                         <td 
                           className="p-1 text-center border-r border-slate-100 dark:border-slate-800 cursor-pointer"
                           onDoubleClick={() => {
@@ -705,6 +718,8 @@ export const FrequenciasNotasView: React.FC = () => {
                             {aluno.notaFinal}
                           </span>
                         </td>
+
+                        {/* STATUS APROVAÇÃO */}
                         <td className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             aluno.statusAprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
@@ -714,15 +729,50 @@ export const FrequenciasNotasView: React.FC = () => {
                             {aluno.statusAprovacao}
                           </span>
                         </td>
-                        <td className="p-1 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
-                            className="text-rose-500 hover:text-rose-700 p-1"
-                            title="Remover operador"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+
+                        {/* AÇÃO (EDITAR / SALVAR / EXCLUIR) */}
+                        <td className="p-1 text-center">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveRow(aluno.id)}
+                                className="flex items-center space-x-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-xs transition-colors"
+                                title="Salvar edição da linha"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Salvar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelRowEdit}
+                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                title="Cancelar"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditRow(aluno)}
+                                className="flex items-center space-x-1 px-2 py-0.5 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded transition-colors text-[10px] font-bold"
+                                title="Editar Matrícula, Login e Nome"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
+                                title="Remover operador"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -730,8 +780,8 @@ export const FrequenciasNotasView: React.FC = () => {
 
                   {editingAlunos.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="p-6 text-center text-slate-400">
-                        Nenhum operador adicionado ainda nesta turma. Use a caixa acima para adicionar por login.
+                      <td colSpan={7} className="p-6 text-center text-slate-400">
+                        Nenhum operador cadastrado nesta turma.
                       </td>
                     </tr>
                   )}
