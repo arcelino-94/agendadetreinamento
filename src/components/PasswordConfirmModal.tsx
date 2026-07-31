@@ -31,7 +31,7 @@ export const PasswordConfirmModal: React.FC<PasswordConfirmModalProps> = ({
       onConfirm();
       onClose();
     } else {
-      setErrorMsg('Senha incorreta! A senha inicial padrão é 123456.');
+      setErrorMsg('Senha incorreta! Digite a senha de segurança autorizada.');
     }
   };
 
@@ -75,7 +75,7 @@ export const PasswordConfirmModal: React.FC<PasswordConfirmModalProps> = ({
                 setPasswordInput(e.target.value);
                 if (errorMsg) setErrorMsg(null);
               }}
-              placeholder="Digite a senha (padrão: 123456)"
+              placeholder="Digite a senha de segurança"
               autoFocus
               className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500 outline-hidden"
             />

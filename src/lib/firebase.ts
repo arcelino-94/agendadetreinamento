@@ -1,14 +1,16 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, Firestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { FirebaseConfigCustom } from '../types';
+import firebaseConfigJson from '../../firebase-applet-config.json';
 
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfigCustom = {
-  apiKey: "AIzaSyBx9A_0p33C0LjoH5ulL1ILMigosqQH-PI",
-  authDomain: "agenda-treinamento-dtm.firebaseapp.com",
-  projectId: "agenda-treinamento-dtm",
-  storageBucket: "agenda-treinamento-dtm.firebasestorage.app",
-  messagingSenderId: "282903601931",
-  appId: "1:282903601931:web:92e5d1d3ec858cc527f80e",
+  apiKey: firebaseConfigJson.apiKey,
+  authDomain: firebaseConfigJson.authDomain,
+  projectId: firebaseConfigJson.projectId,
+  storageBucket: firebaseConfigJson.storageBucket,
+  messagingSenderId: firebaseConfigJson.messagingSenderId,
+  appId: firebaseConfigJson.appId,
+  databaseId: firebaseConfigJson.firestoreDatabaseId,
 };
 
 let firebaseApp: FirebaseApp | null = null;
@@ -16,17 +18,23 @@ let firestoreDb: Firestore | null = null;
 
 export function initFirebase(config: FirebaseConfigCustom = DEFAULT_FIREBASE_CONFIG): { app: FirebaseApp; db: Firestore } | null {
   try {
-    if (!config || !config.apiKey || !config.projectId) {
+    const activeConfig = config || DEFAULT_FIREBASE_CONFIG;
+    if (!activeConfig || !activeConfig.apiKey || !activeConfig.projectId) {
       return null;
     }
 
     if (getApps().length === 0) {
-      firebaseApp = initializeApp(config);
+      firebaseApp = initializeApp(activeConfig);
     } else {
       firebaseApp = getApp();
     }
 
-    firestoreDb = getFirestore(firebaseApp);
+    const dbId = activeConfig.databaseId || firebaseConfigJson.firestoreDatabaseId;
+    if (dbId && dbId !== '(default)') {
+      firestoreDb = getFirestore(firebaseApp, dbId);
+    } else {
+      firestoreDb = getFirestore(firebaseApp);
+    }
     return { app: firebaseApp, db: firestoreDb };
   } catch (error) {
     console.error("Erro ao inicializar Firebase Firestore:", error);
@@ -42,17 +50,35 @@ export function getFirestoreInstance(config?: FirebaseConfigCustom): Firestore |
   return firestoreDb;
 }
 
-export async function saveStateToFirestore(data: any, config?: FirebaseConfigCustom) {
+export async function saveStateToFirestore(data: any, config?: FirebaseConfigCustom): Promise<boolean> {
   try {
     const db = getFirestoreInstance(config);
-    if (!db) return;
+    if (!db) return false;
     const docRef = doc(db, 'treinamentos_td', 'main_state');
     await setDoc(docRef, {
       ...data,
       lastUpdated: new Date().toISOString()
     }, { merge: true });
+    return true;
   } catch (err) {
     console.warn("Firestore sync write fallback:", err);
+    return false;
+  }
+}
+
+export async function loadStateFromFirestore(config?: FirebaseConfigCustom): Promise<any> {
+  try {
+    const db = getFirestoreInstance(config);
+    if (!db) return null;
+    const docRef = doc(db, 'treinamentos_td', 'main_state');
+    const snapshot = await getDoc(docRef);
+    if (snapshot.exists()) {
+      return snapshot.data();
+    }
+    return null;
+  } catch (err) {
+    console.warn("Firestore sync read fallback:", err);
+    return null;
   }
 }
 
@@ -65,6 +91,8 @@ export function subscribeToFirestore(onDataUpdated: (data: any) => void, config?
       if (snapshot.exists()) {
         const val = snapshot.data();
         onDataUpdated(val);
+      } else {
+        onDataUpdated(null);
       }
     }, (error) => {
       console.warn("Firestore listener fallback:", error);
@@ -74,3 +102,4 @@ export function subscribeToFirestore(onDataUpdated: (data: any) => void, config?
     return () => {};
   }
 }
+

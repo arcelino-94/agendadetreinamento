@@ -54,30 +54,46 @@ export function detectSmartGroupings(
   Object.entries(gruposPorTema).forEach(([_normTema, listaDemandas]) => {
     if (listaDemandas.length < 1) return;
 
-    // Se houver múltiplos pedidos ou pedidos com mais de 5 operadores
     const temaOriginal = listaDemandas[0].tema;
     const totalOperadores = listaDemandas.reduce((acc, curr) => acc + curr.qtdOperadores, 0);
     const celulasUnicas = Array.from(new Set(listaDemandas.map(d => d.celulaNome)));
 
-    // APENAS multiplicadores com status "Ativo" são considerados
-    const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+    // Multiplicadores ativos (qualquer um exceto Ausente ou Férias)
+    const multiplicadoresAtivos = multiplicadores.filter(m => m.status !== 'Ausente' && m.status !== 'Férias');
 
-    // Encontrar multiplicadores aptos que possuem o tema nas especialidades
+    // Encontrar multiplicadores aptos por Célula de Atendimento ou Tema/Especialidade
+    // Independente do horário de trabalho (sem filtrar por turno)
     const multiplicadoresAptos = multiplicadoresAtivos.filter(m => {
-      return m.especialidades.some(esp => 
-        normalizeText(esp).includes(normalizeText(temaOriginal)) ||
-        normalizeText(temaOriginal).includes(normalizeText(esp))
-      );
+      // Verifica se a especialidade do multiplicador coincide com a Célula do pedido ou Tema do treinamento
+      const matchesTemaOuCelula = m.especialidades.some(esp => {
+        const normEsp = normalizeText(esp);
+        const normTema = normalizeText(temaOriginal);
+        const isGeral = normEsp === 'geral';
+        
+        const cellMatch = celulasUnicas.some(cel => {
+          const normCel = normalizeText(cel);
+          return normEsp.includes(normCel) || normCel.includes(normEsp);
+        });
+
+        const temaMatch = normEsp.includes(normTema) || normTema.includes(normEsp);
+
+        return isGeral || cellMatch || temaMatch;
+      });
+
+      return matchesTemaOuCelula;
     });
+
+    // Se nenhum filtro restritivo bater, considera todos os ativos como aptos para que a operação escolha
+    const listaFinalMultiplicadores = multiplicadoresAptos.length > 0 ? multiplicadoresAptos : multiplicadoresAtivos;
 
     // Encontrar salas com capacidade adequada
     const salasAptas = salas.filter(s => s.capacidade >= totalOperadores && s.status !== 'Manutenção');
 
     let motivo = '';
     if (listaDemandas.length > 1) {
-      motivo = `Identificados ${listaDemandas.length} pedidos distintos para o tema "${temaOriginal}" abrangendo as células (${celulasUnicas.join(', ')}). Unificar otimizará a carga horária e alocação de sala.`;
+      motivo = `Identificados ${listaDemandas.length} pedidos distintos para o tema "${temaOriginal}" nas células (${celulasUnicas.join(', ')}). Unificar otimizará a alocação de instrutores e salas.`;
     } else {
-      motivo = `Pedido para "${temaOriginal}" da célula ${celulasUnicas[0]} com ${totalOperadores} operadores pronto para formação de turma.`;
+      motivo = `Solicitação de treinamento para "${temaOriginal}" da célula ${celulasUnicas[0]} (${totalOperadores} ops) pronta para agendamento.`;
     }
 
     sugestoes.push({
@@ -86,7 +102,7 @@ export function detectSmartGroupings(
       demandas: listaDemandas,
       totalOperadores,
       celulas: celulasUnicas,
-      multiplicadoresAptos: multiplicadoresAptos.length > 0 ? multiplicadoresAptos : multiplicadoresAtivos,
+      multiplicadoresAptos: listaFinalMultiplicadores,
       salasAptas,
       motivo
     });
@@ -96,7 +112,7 @@ export function detectSmartGroupings(
 }
 
 /**
- * Gera sugestões automáticas de encaixe de horários (Multiplicador + Sala)
+ * Gera sugestões automáticas de encaixe de horários (Multiplicadores Aptos + Sala)
  */
 export function generateSmartSlots(
   demandas: Demanda[],
@@ -108,56 +124,56 @@ export function generateSmartSlots(
   const sugestoes: SugestaoEncaixe[] = [];
 
   const targetDate = new Date().toISOString().split('T')[0];
-
-  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status !== 'Ausente' && m.status !== 'Férias');
 
   pendentes.forEach(demanda => {
-    // 1. Encontrar multiplicador adequado (apenas Ativos)
-    const multiplicadorApto = multiplicadoresAtivos.find(m => {
-      return m.especialidades.some(esp => normalizeText(esp).includes(normalizeText(demanda.tema)) || normalizeText(demanda.tema).includes(normalizeText(esp)));
-    }) || multiplicadoresAtivos[0];
+    // 1. Encontrar TODOS os multiplicadores aptos para a Célula/Tema da demanda (independente do horário de trabalho)
+    const aptos = multiplicadoresAtivos.filter(m => {
+      return m.especialidades.some(esp => {
+        const normEsp = normalizeText(esp);
+        const normTema = normalizeText(demanda.tema);
+        const normCel = normalizeText(demanda.celulaNome);
+        return normEsp === 'geral' || normEsp.includes(normCel) || normCel.includes(normEsp) || normEsp.includes(normTema) || normTema.includes(normEsp);
+      });
+    });
 
-    if (!multiplicadorApto) return;
+    const candidadosMult = aptos.length > 0 ? aptos : multiplicadoresAtivos;
 
     // 2. Encontrar sala com capacidade suficiente
-    const salaApta = salas.find(s => s.capacidade >= demanda.qtdOperadores && s.status !== 'Manutenção');
+    const salaApta = salas.find(s => s.capacidade >= demanda.qtdOperadores && s.status !== 'Manutenção') || salas[0];
     if (!salaApta) return;
 
-    // 3. Definir horário padrão baseado na jornada do multiplicador (ex: 09:00 - 11:00 ou 14:00 - 16:00)
-    let horarioInicio = '09:00';
-    let horarioFim = '11:00';
+    // Para cada multiplicador apto, sugerir encaixe independente do turno de trabalho
+    candidadosMult.forEach(multiplicadorApto => {
+      let horarioInicio = '09:00';
+      let horarioFim = '11:00';
 
-    if (multiplicadorApto.horarioInicio >= '13:00') {
-      horarioInicio = '14:00';
-      horarioFim = '16:00';
-    }
+      const conflitoSala = turmasExistentes.some(t => 
+        t.data === targetDate && 
+        t.salaId === salaApta.id && 
+        t.status !== 'Cancelado' &&
+        isOverlapping(t.horarioInicio, t.horarioFim, horarioInicio, horarioFim)
+      );
 
-    // Verificar se sala/multiplicador já está ocupado nesse horário
-    const conflitoSala = turmasExistentes.some(t => 
-      t.data === targetDate && 
-      t.salaId === salaApta.id && 
-      t.status !== 'Cancelado' &&
-      isOverlapping(t.horarioInicio, t.horarioFim, horarioInicio, horarioFim)
-    );
+      const conflitoMultiplicador = turmasExistentes.some(t => 
+        t.data === targetDate && 
+        t.multiplicadorId === multiplicadorApto.id && 
+        t.status !== 'Cancelado' &&
+        isOverlapping(t.horarioInicio, t.horarioFim, horarioInicio, horarioFim)
+      );
 
-    const conflitoMultiplicador = turmasExistentes.some(t => 
-      t.data === targetDate && 
-      t.multiplicadorId === multiplicadorApto.id && 
-      t.status !== 'Cancelado' &&
-      isOverlapping(t.horarioInicio, t.horarioFim, horarioInicio, horarioFim)
-    );
-
-    if (!conflitoSala && !conflitoMultiplicador) {
-      sugestoes.push({
-        demanda,
-        multiplicador: multiplicadorApto,
-        sala: salaApta,
-        dataSugerida: targetDate,
-        horarioInicio,
-        horarioFim,
-        motivo: `Otimização do prazo (${demanda.prazoLimite}): ${multiplicadorApto.nome} possui especialidade em ${demanda.tema} e a ${salaApta.nome} (cap. ${salaApta.capacidade}) está livre.`
-      });
-    }
+      if (!conflitoSala && !conflitoMultiplicador) {
+        sugestoes.push({
+          demanda,
+          multiplicador: multiplicadorApto,
+          sala: salaApta,
+          dataSugerida: targetDate,
+          horarioInicio,
+          horarioFim,
+          motivo: `Instrutor apto para a célula ${demanda.celulaNome} (${demanda.tema}). Sala ${salaApta.nome} (cap. ${salaApta.capacidade}) disponível.`
+        });
+      }
+    });
   });
 
   return sugestoes;

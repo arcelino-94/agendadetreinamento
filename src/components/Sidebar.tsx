@@ -15,13 +15,29 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  History
+  History,
+  CloudUpload,
+  CloudDownload,
+  Loader2,
+  CloudCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getDeadlineAlerts } from '../lib/planningEngine';
 
 export const Sidebar: React.FC = () => {
-  const { activeTab, setActiveTab, demandas, multiplicadores, salas, tabulador, operadores } = useApp();
+  const { 
+    activeTab, 
+    setActiveTab, 
+    demandas, 
+    multiplicadores, 
+    salas, 
+    tabulador, 
+    operadores,
+    forceSaveToCloud,
+    forceReloadFromCloud,
+    isSaving,
+    saveStatus
+  } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const deadlineAlerts = getDeadlineAlerts(demandas);
@@ -237,6 +253,38 @@ export const Sidebar: React.FC = () => {
                 );
               })}
             </div>
+
+            {/* Sincronização Nuvem Mobile */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
+                <CloudCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Sincronização Nuvem (Firestore)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    forceSaveToCloud();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  disabled={isSaving}
+                  className="flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                >
+                  <CloudUpload className="w-4 h-4" />
+                  <span>Salvar na Nuvem</span>
+                </button>
+                <button
+                  onClick={() => {
+                    forceReloadFromCloud();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  disabled={isSaving}
+                  className="flex items-center justify-center space-x-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  <CloudDownload className="w-4 h-4 text-indigo-500" />
+                  <span>Baixar da Nuvem</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -286,8 +334,66 @@ export const Sidebar: React.FC = () => {
           })}
         </div>
 
+        {/* DESKTOP SIDEBAR CLOUD SYNC ACTIONS */}
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+          {!isCollapsed ? (
+            <div className="bg-indigo-50/70 dark:bg-indigo-950/40 p-2.5 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
+                <span className="flex items-center space-x-1">
+                  <CloudCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Sincronia Nuvem</span>
+                </span>
+                {saveStatus === 'saving' && (
+                  <Loader2 className="w-3 h-3 text-indigo-600 animate-spin" />
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5">
+                <button
+                  onClick={() => forceSaveToCloud()}
+                  disabled={isSaving}
+                  className="w-full flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white py-1.5 px-2 rounded-lg text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
+                  title="Salva e força o envio do estado da máquina atual direto para o Firestore"
+                >
+                  <CloudUpload className="w-3.5 h-3.5" />
+                  <span>Salvar na Nuvem</span>
+                </button>
+
+                <button
+                  onClick={() => forceReloadFromCloud()}
+                  disabled={isSaving}
+                  className="w-full flex items-center justify-center space-x-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                  title="Puxa e restaura os dados mais recentes salvos na nuvem"
+                >
+                  <CloudDownload className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Baixar da Nuvem</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center space-y-1">
+              <button
+                onClick={() => forceSaveToCloud()}
+                disabled={isSaving}
+                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer"
+                title="Forçar Salvar na Nuvem"
+              >
+                <CloudUpload className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => forceReloadFromCloud()}
+                disabled={isSaving}
+                className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                title="Baixar da Nuvem"
+              >
+                <CloudDownload className="w-4 h-4 text-indigo-500" />
+              </button>
+            </div>
+          )}
+        </div>
+
         {!isCollapsed && (
-          <div className="mt-3 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 space-y-1">
+          <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 space-y-1">
             <div className="flex items-center space-x-1.5 text-[11px] font-bold text-slate-800 dark:text-slate-200">
               <AlertCircle className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
               <span>Regra Anti-Conflito</span>

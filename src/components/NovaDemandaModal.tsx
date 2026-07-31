@@ -14,7 +14,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
   onClose,
   initialDemanda
 }) => {
-  const { celulas, addDemanda, updateDemanda, setActiveTab, operadores } = useApp();
+  const { celulas, multiplicadores, addDemanda, updateDemanda, setActiveTab, operadores } = useApp();
 
   const [tipo, setTipo] = useState<TipoDemanda>('Alinhamento');
   const [origem, setOrigem] = useState('E-mail Operacional');
@@ -31,8 +31,18 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
   const [duracaoValor, setDuracaoValor] = useState(20);
   const [duracaoUnidade, setDuracaoUnidade] = useState<'minutos' | 'horas' | 'dias'>('minutos');
 
+  // Novos campos para NOVATOS, Migração, Sinergia
+  const [dataInicio, setDataInicio] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dataFim, setDataFim] = useState(() => {
+    const d = new Date(Date.now() + 7 * 86400000);
+    return d.toISOString().split('T')[0];
+  });
+  const [selectedMultiplicadorId, setSelectedMultiplicadorId] = useState('');
+
   const [listaOperadoresText, setListaOperadoresText] = useState('');
   const [observacoes, setObservacoes] = useState('');
+
+  const isPeriodoType = tipo === 'Novatos' || tipo === 'Migração' || tipo === 'Sinergia';
 
   useEffect(() => {
     if (initialDemanda) {
@@ -53,6 +63,9 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
 
       setDuracaoValor(initialDemanda.duracaoValor || 20);
       setDuracaoUnidade(initialDemanda.duracaoUnidade || 'minutos');
+      setDataInicio(initialDemanda.dataInicio || new Date().toISOString().split('T')[0]);
+      setDataFim(initialDemanda.dataFim || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
+      setSelectedMultiplicadorId(initialDemanda.multiplicadorId || '');
       setListaOperadoresText(initialDemanda.listaOperadores ? initialDemanda.listaOperadores.join('\n') : '');
       setObservacoes(initialDemanda.observacoes || '');
     } else {
@@ -68,10 +81,13 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setIsTodosCelulas(false);
       setDuracaoValor(20);
       setDuracaoUnidade('minutos');
+      setDataInicio(new Date().toISOString().split('T')[0]);
+      setDataFim(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
+      setSelectedMultiplicadorId(multiplicadores.length > 0 ? multiplicadores[0].id : '');
       setListaOperadoresText('');
       setObservacoes('');
     }
-  }, [initialDemanda, celulas, isOpen]);
+  }, [initialDemanda, celulas, multiplicadores, isOpen]);
 
   if (!isOpen) return null;
 
@@ -123,19 +139,29 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
     // Calculate duration in text e.g. "0:20:00" or "20 min"
     const qtdOperadoresCalculated = parsedLogins.length;
 
+    const multObj = multiplicadores.find(m => m.id === selectedMultiplicadorId);
+    const multiplicadorNome = multObj ? multObj.nome : '';
+
+    const finalTema = isPeriodoType ? (tema || `${tipo} - ${celulaNome}`) : tema;
+    const finalPrazo = isPeriodoType ? dataFim : prazoLimite;
+
     if (initialDemanda) {
       updateDemanda(initialDemanda.id, {
         tipo,
         origem,
         supervisor: solicitante || 'T&D/BB',
-        prazoLimite,
-        prioridade,
-        tema,
+        prazoLimite: finalPrazo,
+        prioridade: isPeriodoType ? 'Alta' : prioridade,
+        tema: finalTema,
         celulaId: firstCelulaId,
         celulaIds: selectedCelulas,
         celulaNome,
-        duracaoValor,
-        duracaoUnidade,
+        duracaoValor: isPeriodoType ? undefined : duracaoValor,
+        duracaoUnidade: isPeriodoType ? undefined : duracaoUnidade,
+        dataInicio: isPeriodoType ? dataInicio : undefined,
+        dataFim: isPeriodoType ? dataFim : undefined,
+        multiplicadorId: selectedMultiplicadorId,
+        multiplicadorNome,
         qtdOperadores: qtdOperadoresCalculated,
         listaOperadores: parsedLogins,
         observacoes
@@ -146,14 +172,18 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         origem,
         supervisor: solicitante || 'T&D/BB',
         dataSolicitacao: todayStr,
-        prazoLimite,
-        prioridade,
-        tema,
+        prazoLimite: finalPrazo,
+        prioridade: isPeriodoType ? 'Alta' : prioridade,
+        tema: finalTema,
         celulaId: firstCelulaId,
         celulaIds: selectedCelulas,
         celulaNome,
-        duracaoValor,
-        duracaoUnidade,
+        duracaoValor: isPeriodoType ? undefined : duracaoValor,
+        duracaoUnidade: isPeriodoType ? undefined : duracaoUnidade,
+        dataInicio: isPeriodoType ? dataInicio : undefined,
+        dataFim: isPeriodoType ? dataFim : undefined,
+        multiplicadorId: selectedMultiplicadorId,
+        multiplicadorNome,
         qtdOperadores: qtdOperadoresCalculated,
         listaOperadores: parsedLogins,
         status: 'Novo',
@@ -266,78 +296,132 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2">
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                Tema / Assunto do Treinamento:
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: PIX, Regras de Contestação, Novas Rotinas"
-                value={tema}
-                onChange={(e) => setTema(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-medium text-slate-900 dark:text-white focus:outline-hidden"
-              />
-            </div>
+          {isPeriodoType ? (
+            /* Campos Específicos para NOVATOS, MIGRAÇÃO e SINERGIA */
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Data Início do Período:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                Prioridade:
-              </label>
-              <select
-                value={prioridade}
-                onChange={(e) => setPrioridade(e.target.value as Prioridade)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
-              >
-                <option value="Baixa">Baixa</option>
-                <option value="Média">Média</option>
-                <option value="Alta">Alta</option>
-                <option value="Urgente">Urgente</option>
-              </select>
-            </div>
-          </div>
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Data Fim do Período:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
+                  />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                Duração do Treinamento:
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={500}
-                  required
-                  value={duracaoValor}
-                  onChange={(e) => setDuracaoValor(parseInt(e.target.value) || 1)}
-                  className="w-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-center font-bold text-slate-900 dark:text-white focus:outline-hidden"
-                />
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                  Multiplicador Condução do Treinamento:
+                </label>
                 <select
-                  value={duracaoUnidade}
-                  onChange={(e) => setDuracaoUnidade(e.target.value as any)}
-                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                  value={selectedMultiplicadorId}
+                  onChange={(e) => setSelectedMultiplicadorId(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
                 >
-                  <option value="minutos">Minutos</option>
-                  <option value="horas">Horas</option>
-                  <option value="dias">Dias</option>
+                  <option value="">Selecione o Multiplicador...</option>
+                  {multiplicadores.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.nome} ({m.status})
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
+          ) : (
+            /* Campos Padrão para Alinhamento, Reciclagem, Retorno LMG */
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Tema / Assunto do Treinamento:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: PIX, Regras de Contestação, Novas Rotinas"
+                    value={tema}
+                    onChange={(e) => setTema(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-medium text-slate-900 dark:text-white focus:outline-hidden"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                Prazo Limite (SLA):
-              </label>
-              <input
-                type="date"
-                required
-                value={prazoLimite}
-                onChange={(e) => setPrazoLimite(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
-              />
-            </div>
-          </div>
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Prioridade:
+                  </label>
+                  <select
+                    value={prioridade}
+                    onChange={(e) => setPrioridade(e.target.value as Prioridade)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
+                  >
+                    <option value="Baixa">Baixa</option>
+                    <option value="Média">Média</option>
+                    <option value="Alta">Alta</option>
+                    <option value="Urgente">Urgente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Duração do Treinamento:
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      required
+                      value={duracaoValor}
+                      onChange={(e) => setDuracaoValor(parseInt(e.target.value) || 1)}
+                      className="w-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-center font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                    />
+                    <select
+                      value={duracaoUnidade}
+                      onChange={(e) => setDuracaoUnidade(e.target.value as any)}
+                      className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                    >
+                      <option value="minutos">Minutos</option>
+                      <option value="horas">Horas</option>
+                      <option value="dias">Dias</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Prazo Limite (SLA):
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={prazoLimite}
+                    onChange={(e) => setPrazoLimite(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-1">

@@ -81,8 +81,8 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
     }
   };
 
-  // Apenas multiplicadores com status "Ativo" aparecem na agenda
-  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+  // Multiplicadores ativos (todos disponíveis ou em atividade, exceto Ausente ou Férias)
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status !== 'Ausente' && m.status !== 'Férias');
 
   // Filtragem de multiplicadores por especialidade
   const filteredMultiplicadores = filterSpecialty === 'todos' 

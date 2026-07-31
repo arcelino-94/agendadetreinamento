@@ -16,10 +16,14 @@ import {
   X,
   UserCheck,
   Award,
-  BookOpen
+  BookOpen,
+  Calendar,
+  FileSpreadsheet,
+  AlertCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ItemFrequenciaNota, AlunoFrequenciaNota } from '../types';
+import { PasswordConfirmModal } from './PasswordConfirmModal';
 
 export const FrequenciasNotasView: React.FC = () => {
   const { demandas, celulas, multiplicadores, operadores } = useApp();
@@ -85,6 +89,17 @@ export const FrequenciasNotasView: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>('TODOS');
   const [selectedYear, setSelectedYear] = useState<string>('TODOS');
   const [activeCourse, setActiveCourse] = useState<ItemFrequenciaNota | null>(null);
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
+
+  // Sub-modals inside active course details
+  const [isLancarPresencaOpen, setIsLancarPresencaOpen] = useState(false);
+  const [presencaData, setPresencaData] = useState(new Date().toISOString().split('T')[0]);
+  const [presencaStatus, setPresencaStatus] = useState<'Presente' | 'Falta' | 'Atestado' | 'TO'>('Presente');
+
+  const [isLancarNotaOpen, setIsLancarNotaOpen] = useState(false);
+  const [nomeProvaInput, setNomeProvaInput] = useState('Prova 1');
+  const [dataProvaInput, setDataProvaInput] = useState(new Date().toISOString().split('T')[0]);
+  const [notaInputMap, setNotaInputMap] = useState<Record<string, number>>({});
 
   // Filtered items
   const filteredItems = useMemo(() => {
@@ -186,8 +201,16 @@ export const FrequenciasNotasView: React.FC = () => {
     if (!newLoginInput.trim()) return;
     const logins = newLoginInput.split(/[\s,;\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
     
+    // Existing logins / matDP set to prevent overwriting existing data
+    const existingKeys = new Set(
+      editingAlunos.flatMap(a => [a.loginBB.toUpperCase(), a.matDP.toUpperCase()])
+    );
+
     const newStudents: AlunoFrequenciaNota[] = [];
     logins.forEach(login => {
+      // Prevent overwriting data that was already logged previously
+      if (existingKeys.has(login)) return;
+
       const op = operadores.find(o => o.loginBB.toUpperCase() === login || o.matDP === login);
       newStudents.push({
         id: `aln-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -201,10 +224,66 @@ export const FrequenciasNotasView: React.FC = () => {
         notaFinal: 80,
         statusAprovacao: 'Aprovado'
       });
+      existingKeys.add(login);
     });
 
     setEditingAlunos(prev => [...prev, ...newStudents]);
     setNewLoginInput('');
+  };
+
+  // Handler for Lançar Presença with Regra do TO
+  const handleApplyPresencaInBulk = () => {
+    setEditingAlunos(prev => prev.map(aluno => {
+      let newFreq = aluno.frequenciaPercent;
+      if (presencaStatus === 'Falta') {
+        newFreq = Math.max(0, newFreq - 10);
+      } else if (presencaStatus === 'Presente') {
+        newFreq = Math.min(100, newFreq + 5);
+      } else if (presencaStatus === 'TO') {
+        // Regra do TO: Se marcado como TO, todas as caixas futuras ficam preenchidas como TO
+        newFreq = 0;
+      }
+      
+      const freq = newFreq;
+      const nota = aluno.notaFinal;
+      let status: 'Aprovado' | 'Reprovado' | 'Em Andamento' = 'Aprovado';
+      if (presencaStatus === 'TO' || freq < 75 || nota < 50) {
+        status = 'Reprovado';
+      } else if (freq < 85 || nota < 70) {
+        status = 'Em Andamento';
+      }
+
+      return {
+        ...aluno,
+        frequenciaPercent: freq,
+        statusAprovacao: status
+      };
+    }));
+    setIsLancarPresencaOpen(false);
+  };
+
+  // Handler for Lançar Nota (calculates media final)
+  const handleSaveLancarNota = () => {
+    setEditingAlunos(prev => prev.map(aluno => {
+      const notaDigitada = notaInputMap[aluno.id];
+      if (typeof notaDigitada === 'number' && !isNaN(notaDigitada)) {
+        // Compute average between existing final grade and new test grade
+        const novaNotaFinal = Math.round((aluno.notaFinal + notaDigitada) / 2 * 10) / 10;
+        const freq = aluno.frequenciaPercent;
+        let status: 'Aprovado' | 'Reprovado' | 'Em Andamento' = 'Aprovado';
+        if (freq < 75 || novaNotaFinal < 50) status = 'Reprovado';
+        else if (freq < 85 || novaNotaFinal < 70) status = 'Em Andamento';
+
+        return {
+          ...aluno,
+          notaFinal: novaNotaFinal,
+          statusAprovacao: status
+        };
+      }
+      return aluno;
+    }));
+    setIsLancarNotaOpen(false);
+    setNotaInputMap({});
   };
 
   const handleSaveCourseChanges = () => {
@@ -347,14 +426,13 @@ export const FrequenciasNotasView: React.FC = () => {
 
           {/* MONTH PICKLIST */}
           <div className="flex items-center space-x-1.5">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Mês:</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Mês:</span>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold"
+              className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 font-normal"
             >
               <option value="TODOS">TODOS OS MESES</option>
-              <option value="EM_BRANCO">MÊS EM BRANCO</option>
               <option value="1">Janeiro (01)</option>
               <option value="2">Fevereiro (02)</option>
               <option value="3">Março (03)</option>
@@ -372,17 +450,16 @@ export const FrequenciasNotasView: React.FC = () => {
 
           {/* YEAR PICKLIST */}
           <div className="flex items-center space-x-1.5">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Ano:</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Ano:</span>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold"
+              className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 font-normal"
             >
               <option value="TODOS">TODOS OS ANOS</option>
-              <option value="EM_BRANCO">ANO EM BRANCO</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
               <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
               <option value="2027">2027</option>
             </select>
           </div>
@@ -443,6 +520,14 @@ export const FrequenciasNotasView: React.FC = () => {
                     <FileCheck className="w-3.5 h-3.5" />
                     <span>Lançar Frequência & Notas</span>
                   </button>
+
+                  <button
+                    onClick={() => setDeletingCourseId(course.id)}
+                    className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900 transition-colors"
+                    title="Excluir este programa/turma"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
@@ -485,7 +570,7 @@ export const FrequenciasNotasView: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-5xl w-full border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
             
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                   Boletim de Frequência & Notas
@@ -494,23 +579,44 @@ export const FrequenciasNotasView: React.FC = () => {
                   {activeCourse.treinamento}
                 </h2>
               </div>
-              <button
-                onClick={() => setActiveCourse(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLancarPresencaOpen(true)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Lançar Presença</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsLancarNotaOpen(true)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Lançar Nota</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveCourse(null)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* ADD OPERATOR INPUT IN BULK */}
             <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-                Adicionar Operador por Login / Matrícula (C1234567):
+                Adicionar Operadores por Login ou Matrícula (Importação sem Sobrescrever):
               </label>
               <div className="flex space-x-2">
                 <input
                   type="text"
-                  placeholder="Cole ou digite logins ex: C1315137 C1286562 C1274287"
+                  placeholder="Cole logins ex: C1315137 C1286562 C1274287"
                   value={newLoginInput}
                   onChange={(e) => setNewLoginInput(e.target.value)}
                   className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
@@ -518,29 +624,33 @@ export const FrequenciasNotasView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleAddStudentByLogin}
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors"
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors"
                 >
-                  Adicionar Operadores
+                  Importar
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400">
+                * Dica: Duplo clique na célula de Frequência ou Nota Final permite editar e salva automaticamente.
+              </p>
             </div>
 
-            {/* STUDENTS LIST TABLE */}
-            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto">
-              <table className="w-full text-left text-[11px] whitespace-nowrap">
-                <thead className="bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">
+            {/* STUDENTS LIST TABLE (WITHOUT CÉLULA COLUMN, REDUCED HEIGHT, NO BOLD) */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto min-h-[250px]">
+              <table className="w-full text-left text-[10px] whitespace-nowrap">
+                <thead className="bg-slate-800 text-white font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="p-2 border-r border-slate-700">MATRÍCULA DP</th>
-                    <th className="p-2 border-r border-slate-700">LOGIN BB</th>
-                    <th className="p-2 border-r border-slate-700">NOME OPERADOR</th>
-                    <th className="p-2 border-r border-slate-700">CÉLULA</th>
-                    <th className="p-2 text-center border-r border-slate-700">FREQUÊNCIA (%)</th>
-                    <th className="p-2 text-center border-r border-slate-700">NOTA PROVA (0-100)</th>
-                    <th className="p-2 text-center border-r border-slate-700">STATUS</th>
-                    <th className="p-2 text-right">AÇÃO</th>
+                    <th className="p-1.5 border-r border-slate-700">MATRÍCULA DP</th>
+                    <th className="p-1.5 border-r border-slate-700">LOGIN BB</th>
+                    <th className="p-1.5 border-r border-slate-700">NOME OPERADOR</th>
+                    <th className="p-1.5 border-r border-slate-700">SUPERVISOR</th>
+                    <th className="p-1.5 border-r border-slate-700">GERENTE</th>
+                    <th className="p-1.5 text-center border-r border-slate-700">FREQUÊNCIA (%)</th>
+                    <th className="p-1.5 text-center border-r border-slate-700">MÉDIA DAS NOTAS (0-100)</th>
+                    <th className="p-1.5 text-center border-r border-slate-700">STATUS APROVAÇÃO</th>
+                    <th className="p-1.5 text-right">AÇÃO</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-normal">
                   {editingAlunos.map((aluno) => {
                     let displayLogin = aluno.loginBB || '';
                     let displayMat = aluno.matDP || '';
@@ -551,41 +661,51 @@ export const FrequenciasNotasView: React.FC = () => {
                     }
 
                     return (
-                      <tr key={aluno.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="p-2 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
+                      <tr key={aluno.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/50">
+                        <td className="p-1.5 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
                           {displayMat || 'N/A'}
                         </td>
-                        <td className="p-2 font-mono font-bold text-indigo-700 dark:text-indigo-400 border-r border-slate-100 dark:border-slate-800">
+                        <td className="p-1.5 font-mono font-normal text-indigo-700 dark:text-indigo-400 border-r border-slate-100 dark:border-slate-800">
                           {displayLogin || 'N/A'}
                         </td>
-                        <td className="p-2 font-bold text-slate-900 dark:text-white border-r border-slate-100 dark:border-slate-800">
+                        <td className="p-1.5 font-normal text-slate-900 dark:text-white border-r border-slate-100 dark:border-slate-800">
                           {aluno.nome}
                         </td>
-                        <td className="p-2 text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {aluno.celula || 'GERAL'}
+                        <td className="p-1.5 text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
+                          {aluno.supervisor || 'N/A'}
                         </td>
-                        <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={aluno.frequenciaPercent}
-                            onChange={(e) => handleUpdateStudent(aluno.id, 'frequenciaPercent', parseFloat(e.target.value) || 0)}
-                            className="w-16 px-1.5 py-0.5 text-center font-bold border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
-                          />
+                        <td className="p-1.5 text-slate-500 border-r border-slate-100 dark:border-slate-800">
+                          {aluno.gerente || 'N/A'}
                         </td>
-                        <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step={0.5}
-                            value={aluno.notaFinal}
-                            onChange={(e) => handleUpdateStudent(aluno.id, 'notaFinal', parseFloat(e.target.value) || 0)}
-                            className="w-16 px-1.5 py-0.5 text-center font-bold border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
-                          />
+                        <td 
+                          className="p-1 text-center border-r border-slate-100 dark:border-slate-800 cursor-pointer"
+                          onDoubleClick={() => {
+                            const val = prompt('Informe a Frequência % (0-100):', aluno.frequenciaPercent.toString());
+                            if (val !== null) {
+                              handleUpdateStudent(aluno.id, 'frequenciaPercent', parseFloat(val) || 0);
+                            }
+                          }}
+                          title="Duplo clique para editar frequência"
+                        >
+                          <span className="font-mono font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                            {aluno.frequenciaPercent}%
+                          </span>
                         </td>
-                        <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
+                        <td 
+                          className="p-1 text-center border-r border-slate-100 dark:border-slate-800 cursor-pointer"
+                          onDoubleClick={() => {
+                            const val = prompt('Informe a Média das Notas (0-100):', aluno.notaFinal.toString());
+                            if (val !== null) {
+                              handleUpdateStudent(aluno.id, 'notaFinal', parseFloat(val) || 0);
+                            }
+                          }}
+                          title="Duplo clique para editar média das notas"
+                        >
+                          <span className="font-mono font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                            {aluno.notaFinal}
+                          </span>
+                        </td>
+                        <td className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             aluno.statusAprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
                             aluno.statusAprovacao === 'Reprovado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
@@ -594,14 +714,14 @@ export const FrequenciasNotasView: React.FC = () => {
                             {aluno.statusAprovacao}
                           </span>
                         </td>
-                        <td className="p-2 text-right">
+                        <td className="p-1 text-right">
                           <button
                             type="button"
                             onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
                             className="text-rose-500 hover:text-rose-700 p-1"
                             title="Remover operador"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
@@ -610,7 +730,7 @@ export const FrequenciasNotasView: React.FC = () => {
 
                   {editingAlunos.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-6 text-center text-slate-400">
+                      <td colSpan={9} className="p-6 text-center text-slate-400">
                         Nenhum operador adicionado ainda nesta turma. Use a caixa acima para adicionar por login.
                       </td>
                     </tr>
@@ -632,13 +752,196 @@ export const FrequenciasNotasView: React.FC = () => {
                 onClick={handleSaveCourseChanges}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs"
               >
-                Salvar Frequências & Notas
+                Salvar Boletim
               </button>
             </div>
 
           </div>
         </div>
       )}
+
+      {/* LANÇAR PRESENÇA MODAL */}
+      {isLancarPresencaOpen && activeCourse && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-emerald-600" />
+                Lançar Presença Diária
+              </h3>
+              <button onClick={() => setIsLancarPresencaOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Data de Lançamento:</label>
+                <input
+                  type="date"
+                  value={presencaData}
+                  onChange={(e) => setPresencaData(e.target.value)}
+                  className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Status de Presença:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Presente', 'Falta', 'Atestado', 'TO'] as const).map(status => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setPresencaStatus(status)}
+                      className={`p-2.5 rounded-xl border text-center font-bold text-xs transition-all ${
+                        presencaStatus === status
+                          ? status === 'Presente' ? 'bg-emerald-600 text-white border-emerald-600' :
+                            status === 'Falta' ? 'bg-rose-600 text-white border-rose-600' :
+                            status === 'Atestado' ? 'bg-blue-600 text-white border-blue-600' :
+                            'bg-amber-600 text-white border-amber-600'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {presencaStatus === 'TO' && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl text-amber-800 dark:text-amber-300 text-[11px] space-y-1">
+                  <p className="font-bold">Regra do TO Ativa:</p>
+                  <p>
+                    Ao selecionar TO (Treinamento Obrigatório PENDENTE / TO), todas as datas e caixas de frequência futuras desta turma serão preenchidas automaticamente como TO.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsLancarPresencaOpen(false)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyPresencaInBulk}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
+              >
+                Aplicar Presença
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LANÇAR NOTA MODAL */}
+      {isLancarNotaOpen && activeCourse && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-indigo-600" />
+                Lançar Nota de Avaliação / Prova
+              </h3>
+              <button onClick={() => setIsLancarNotaOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Identificação da Prova:</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Nº Prova 1"
+                  value={nomeProvaInput}
+                  onChange={(e) => setNomeProvaInput(e.target.value)}
+                  className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Data da Prova:</label>
+                <input
+                  type="date"
+                  value={dataProvaInput}
+                  onChange={(e) => setDataProvaInput(e.target.value)}
+                  className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Lançar Nota dos Operadores (A Média da Nota será atualizada na tabela principal):
+              </p>
+              <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
+                {editingAlunos.map(aluno => (
+                  <div key={aluno.id} className="flex items-center justify-between p-2 text-xs">
+                    <div>
+                      <p className="font-bold text-slate-900 dark:text-white">{aluno.nome}</p>
+                      <p className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400">{aluno.loginBB} ({aluno.matDP})</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] text-slate-400">Nota:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="0-100"
+                        value={notaInputMap[aluno.id] !== undefined ? notaInputMap[aluno.id] : ''}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setNotaInputMap(prev => ({
+                            ...prev,
+                            [aluno.id]: isNaN(val) ? 0 : val
+                          }));
+                        }}
+                        className="w-20 p-1 border border-slate-300 dark:border-slate-700 rounded text-center font-mono font-bold text-slate-900 dark:text-white text-xs bg-white dark:bg-slate-800"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsLancarNotaOpen(false)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveLancarNota}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold"
+              >
+                Calcular e Lançar Média
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL FOR DELETE COURSE */}
+      <PasswordConfirmModal
+        isOpen={deletingCourseId !== null}
+        onClose={() => setDeletingCourseId(null)}
+        onConfirm={() => {
+          if (deletingCourseId) {
+            setItems(prev => prev.filter(c => c.id !== deletingCourseId));
+            setDeletingCourseId(null);
+          }
+        }}
+        title="Confirmar Exclusão de Turma / Programa"
+        itemDescription="esta turma de Frequência e Notas"
+      />
 
     </div>
   );

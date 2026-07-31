@@ -142,10 +142,10 @@ export const FirebaseConfigModal: React.FC<FirebaseConfigModalProps> = ({
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 rounded-xl space-y-1.5">
               <div className="flex items-center space-x-2 text-emerald-800 dark:text-emerald-300 font-bold">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Firestore Conectado: agenda-treinamento-dtm</span>
+                <span>Firestore Conectado: {projectId}</span>
               </div>
               <p className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-tight">
-                Sua aplicação está sincronizada em tempo real com o banco de dados Firebase no projeto <strong className="font-mono">agenda-treinamento-dtm</strong>.
+                Sua aplicação está sincronizada em tempo real com o banco de dados Cloud Firestore (<strong className="font-mono">{projectId}</strong>). Qualquer alteração feita aqui é propagada instantaneamente para todos os usuários conectados.
               </p>
             </div>
 

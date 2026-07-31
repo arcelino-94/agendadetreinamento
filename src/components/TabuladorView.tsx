@@ -36,6 +36,14 @@ function calculateHorasTreinamento(presentes: number, chString: string): string 
   return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+// Helper to display first and last name for Multiplicador
+function formatShortName(fullName: string): string {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
 // Reusable Excel-style Multi-Select Checkbox Dropdown Filter Component
 interface ExcelMultiSelectFilterProps {
   label: string;
@@ -288,6 +296,7 @@ export const TabuladorView: React.FC = () => {
   const [viewingFullAlignment, setViewingFullAlignment] = useState<AlinhamentoTabulador | null>(null);
 
   // Excel-style Multi-Select Checkbox Column Filters inside viewingFullAlignment
+  const [colFilterMatDP, setColFilterMatDP] = useState<string[]>([]);
   const [colFilterLogin, setColFilterLogin] = useState<string[]>([]);
   const [colFilterNome, setColFilterNome] = useState<string[]>([]);
   const [colFilterSupervisor, setColFilterSupervisor] = useState<string[]>([]);
@@ -295,11 +304,14 @@ export const TabuladorView: React.FC = () => {
   const [colFilterSegmento, setColFilterSegmento] = useState<string[]>([]);
   const [colFilterMultiplicador, setColFilterMultiplicador] = useState<string[]>([]);
   const [colFilterLocal, setColFilterLocal] = useState<string[]>([]);
+  const [colFilterData, setColFilterData] = useState<string[]>([]);
+  const [colFilterHora, setColFilterHora] = useState<string[]>([]);
   const [colFilterStatus, setColFilterStatus] = useState<string[]>([]);
 
   // Reset alignment column filters when opening a new alignment
   useEffect(() => {
     if (viewingFullAlignment) {
+      setColFilterMatDP([]);
       setColFilterLogin([]);
       setColFilterNome([]);
       setColFilterSupervisor([]);
@@ -307,6 +319,8 @@ export const TabuladorView: React.FC = () => {
       setColFilterSegmento([]);
       setColFilterMultiplicador([]);
       setColFilterLocal([]);
+      setColFilterData([]);
+      setColFilterHora([]);
       setColFilterStatus([]);
     }
   }, [viewingFullAlignment?.id]);
@@ -408,6 +422,7 @@ export const TabuladorView: React.FC = () => {
   // Options for Viewing Operators Modal
   const opList = useMemo(() => viewingFullAlignment?.operadores || [], [viewingFullAlignment]);
 
+  const optionsMatDP = useMemo(() => Array.from(new Set(opList.map(o => o.matDP).filter(Boolean))).sort(), [opList]);
   const optionsLogin = useMemo(() => Array.from(new Set(opList.map(o => o.loginBB).filter(Boolean))).sort(), [opList]);
   const optionsNome = useMemo(() => Array.from(new Set(opList.map(o => o.nome).filter(Boolean))).sort(), [opList]);
   const optionsSupervisor = useMemo(() => Array.from(new Set(opList.map(o => o.supervisor || 'N/A'))).sort(), [opList]);
@@ -415,6 +430,8 @@ export const TabuladorView: React.FC = () => {
   const optionsSegmento = useMemo(() => Array.from(new Set(opList.map(o => o.segmento || viewingFullAlignment?.celula || 'N/A'))).sort(), [opList, viewingFullAlignment]);
   const optionsMultiplicador = useMemo(() => Array.from(new Set(opList.map(o => o.multiplicador || 'T&D/BB'))).sort(), [opList]);
   const optionsLocal = useMemo(() => Array.from(new Set(opList.map(o => o.local || 'Ilha Operacional'))).sort(), [opList]);
+  const optionsData = useMemo(() => Array.from(new Set(opList.map(o => o.dataPresenca || viewingFullAlignment?.data || 'N/A'))).sort(), [opList, viewingFullAlignment]);
+  const optionsHora = useMemo(() => Array.from(new Set(opList.map(o => o.horario || 'N/A'))).sort(), [opList]);
 
   // Collected Status Options including standard statuses and custom absence types (Atestado, Férias, etc.)
   const optionsStatus = useMemo(() => {
@@ -431,6 +448,7 @@ export const TabuladorView: React.FC = () => {
   const filteredAlignmentOperators = useMemo(() => {
     if (!viewingFullAlignment) return [];
     return (viewingFullAlignment.operadores || []).filter(op => {
+      const opMat = op.matDP || 'N/A';
       const opLogin = op.loginBB || '';
       const opNome = op.nome || '';
       const opSup = op.supervisor || 'N/A';
@@ -438,9 +456,12 @@ export const TabuladorView: React.FC = () => {
       const opSeg = op.segmento || viewingFullAlignment.celula || 'N/A';
       const opMulti = op.multiplicador || 'T&D/BB';
       const opLocal = op.local || 'Ilha Operacional';
+      const opData = op.dataPresenca || viewingFullAlignment.data || 'N/A';
+      const opHora = op.horario || 'N/A';
       const opStatus = op.statusPresenca || 'Presente';
       const opAusencia = op.tipoAusencia || '';
 
+      const matchMat = colFilterMatDP.length === 0 || colFilterMatDP.includes('__NONE__') ? colFilterMatDP.length === 0 : colFilterMatDP.includes(opMat);
       const matchLogin = colFilterLogin.length === 0 || colFilterLogin.includes('__NONE__') ? colFilterLogin.length === 0 : colFilterLogin.includes(opLogin) || colFilterLogin.includes(op.matDP || '');
       const matchNome = colFilterNome.length === 0 || colFilterNome.includes('__NONE__') ? colFilterNome.length === 0 : colFilterNome.includes(opNome);
       const matchSup = colFilterSupervisor.length === 0 || colFilterSupervisor.includes('__NONE__') ? colFilterSupervisor.length === 0 : colFilterSupervisor.includes(opSup);
@@ -448,6 +469,8 @@ export const TabuladorView: React.FC = () => {
       const matchSeg = colFilterSegmento.length === 0 || colFilterSegmento.includes('__NONE__') ? colFilterSegmento.length === 0 : colFilterSegmento.includes(opSeg);
       const matchMulti = colFilterMultiplicador.length === 0 || colFilterMultiplicador.includes('__NONE__') ? colFilterMultiplicador.length === 0 : colFilterMultiplicador.includes(opMulti);
       const matchLocal = colFilterLocal.length === 0 || colFilterLocal.includes('__NONE__') ? colFilterLocal.length === 0 : colFilterLocal.includes(opLocal);
+      const matchData = colFilterData.length === 0 || colFilterData.includes('__NONE__') ? colFilterData.length === 0 : colFilterData.includes(opData);
+      const matchHora = colFilterHora.length === 0 || colFilterHora.includes('__NONE__') ? colFilterHora.length === 0 : colFilterHora.includes(opHora);
 
       let matchStatus = true;
       if (colFilterStatus.length > 0) {
@@ -460,10 +483,11 @@ export const TabuladorView: React.FC = () => {
         }
       }
 
-      return matchLogin && matchNome && matchSup && matchGer && matchSeg && matchMulti && matchLocal && matchStatus;
+      return matchMat && matchLogin && matchNome && matchSup && matchGer && matchSeg && matchMulti && matchLocal && matchData && matchHora && matchStatus;
     });
   }, [
     viewingFullAlignment, 
+    colFilterMatDP,
     colFilterLogin, 
     colFilterNome, 
     colFilterSupervisor, 
@@ -471,18 +495,21 @@ export const TabuladorView: React.FC = () => {
     colFilterSegmento, 
     colFilterMultiplicador, 
     colFilterLocal, 
+    colFilterData,
+    colFilterHora,
     colFilterStatus
   ]);
 
-  // Overall metrics
+  // Overall metrics (Aderência não deve contar os dispensados!)
   const totalConvocados = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.convocados || 0), 0), [filteredTabulador]);
   const totalPresentes = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.presentes || 0), 0), [filteredTabulador]);
   const totalDispensado = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.dispensado || 0), 0), [filteredTabulador]);
   const totalPendentes = useMemo(() => filteredTabulador.reduce((acc, curr) => acc + (curr.pendentes || (curr.convocados - curr.presentes - curr.dispensado)), 0), [filteredTabulador]);
   const mediaPercentual = useMemo(() => {
-    if (totalConvocados === 0) return 0;
-    return Math.round((totalPresentes / totalConvocados) * 100);
-  }, [totalConvocados, totalPresentes]);
+    const baseAderencia = totalConvocados - totalDispensado;
+    if (baseAderencia <= 0) return 0;
+    return Math.round((totalPresentes / baseAderencia) * 100);
+  }, [totalConvocados, totalDispensado, totalPresentes]);
 
   // Handle Edit/Save Form
   const handleOpenModal = (item?: AlinhamentoTabulador) => {
@@ -779,7 +806,7 @@ export const TabuladorView: React.FC = () => {
 
           {/* Month & Year Selectors next to Search Field */}
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0 flex items-center space-x-1">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-300 shrink-0 flex items-center space-x-1">
               <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>Período:</span>
             </span>
@@ -788,7 +815,7 @@ export const TabuladorView: React.FC = () => {
             <select
               value={selectedMonthNum}
               onChange={(e) => setSelectedMonthNum(e.target.value)}
-              className="px-2 py-1.5 border border-amber-300 dark:border-amber-700/60 rounded-lg text-xs bg-amber-50 dark:bg-slate-800 text-slate-900 dark:text-amber-200 outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold uppercase"
+              className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 font-normal uppercase"
             >
               <option value="todos">TODOS OS MESES</option>
               <option value="01">01 - JANEIRO</option>
@@ -803,21 +830,19 @@ export const TabuladorView: React.FC = () => {
               <option value="10">10 - OUTUBRO</option>
               <option value="11">11 - NOVEMBRO</option>
               <option value="12">12 - DEZEMBRO</option>
-              <option value="em_branco">MÊS EM BRANCO</option>
             </select>
 
             {/* Ano Picklist */}
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-2 py-1.5 border border-amber-300 dark:border-amber-700/60 rounded-lg text-xs bg-amber-50 dark:bg-slate-800 text-slate-900 dark:text-amber-200 outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold uppercase"
+              className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 font-normal uppercase"
             >
               <option value="todos">TODOS OS ANOS</option>
               <option value="2026">2026</option>
               <option value="2025">2025</option>
               <option value="2024">2024</option>
               <option value="2027">2027</option>
-              <option value="em_branco">ANO EM BRANCO</option>
             </select>
           </div>
 
@@ -954,65 +979,65 @@ export const TabuladorView: React.FC = () => {
                   return (
                     <tr 
                       key={item.id} 
-                      className={`${rowBg} hover:bg-indigo-50/50 dark:hover:bg-slate-800/80 transition-colors border-b border-slate-200/80 dark:border-slate-800`}
+                      className={`${rowBg} hover:bg-indigo-50/50 dark:hover:bg-slate-800/80 transition-colors border-b border-slate-200/80 dark:border-slate-800 text-[10px] font-normal`}
                     >
                       {/* TREINAMENTO - CLICKABLE TO OPEN DEDICATED FULL TABLE */}
-                      <td className="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-800">
+                      <td className="px-2.5 py-1.5 font-normal border-r border-slate-200 dark:border-slate-800">
                         <button
                           onClick={() => setViewingFullAlignment(item)}
-                          className="flex items-center space-x-2 text-left text-indigo-900 dark:text-indigo-200 hover:text-indigo-600 dark:hover:text-indigo-400 group transition-colors"
+                          className="flex items-center space-x-1.5 text-left text-indigo-900 dark:text-indigo-200 hover:text-indigo-600 dark:hover:text-indigo-400 group transition-colors"
                           title="Clique para abrir a Tabela Completa de Operadores com Filtros Excel"
                         >
-                          <span className="w-1.5 h-6 bg-indigo-600 group-hover:bg-amber-500 rounded-full shrink-0 transition-colors"></span>
-                          <span className="line-clamp-2 uppercase group-hover:underline font-extrabold">{item.treinamento}</span>
+                          <span className="w-1.5 h-5 bg-indigo-600 group-hover:bg-amber-500 rounded-full shrink-0 transition-colors"></span>
+                          <span className="uppercase group-hover:underline font-normal text-[10.5px] break-words">{item.treinamento}</span>
                         </button>
                       </td>
 
                       {/* SOLICITANTE */}
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300 font-medium border-r border-slate-200 dark:border-slate-800 uppercase">
+                      <td className="px-2 py-1.5 text-slate-600 dark:text-slate-300 font-normal border-r border-slate-200 dark:border-slate-800 uppercase whitespace-nowrap">
                         {item.solicitante || 'OPERAÇÃO / T&D/BB'}
                       </td>
 
                       {/* CELULA */}
-                      <td className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-800">
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase">
+                      <td className="px-2 py-1.5 border-r border-slate-200 dark:border-slate-800">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[9.5px] font-normal bg-indigo-50 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase whitespace-nowrap">
                           {item.celula}
                         </span>
                       </td>
 
                       {/* CONVOCADOS */}
-                      <td className="px-2.5 py-2.5 text-center font-bold text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                      <td className="px-2 py-1.5 text-center font-normal text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
                         {item.convocados}
                       </td>
 
                       {/* PRESENTES */}
-                      <td className="px-2.5 py-2.5 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-200 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20">
+                      <td className="px-2 py-1.5 text-center font-normal text-emerald-700 dark:text-emerald-400 border-r border-slate-200 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20">
                         {item.presentes}
                       </td>
 
                       {/* DISPENSADO */}
-                      <td className="px-2.5 py-2.5 text-center font-semibold text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800">
+                      <td className="px-2 py-1.5 text-center font-normal text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800">
                         {item.dispensado}
                       </td>
 
                       {/* PENDENTES */}
-                      <td className="px-2.5 py-2.5 text-center font-bold text-amber-700 dark:text-amber-400 border-r border-slate-200 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/20">
+                      <td className="px-2 py-1.5 text-center font-normal text-amber-700 dark:text-amber-400 border-r border-slate-200 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/20">
                         {item.pendentes}
                       </td>
 
                       {/* HORAS TREIN. */}
-                      <td className="px-3 py-2.5 text-center font-mono font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800">
+                      <td className="px-2 py-1.5 text-center font-mono font-normal text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
                         {item.horasTreinamento}
                       </td>
 
                       {/* CH */}
-                      <td className="px-2.5 py-2.5 text-center font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800">
+                      <td className="px-2 py-1.5 text-center font-mono font-normal text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
                         {item.cargaHoraria}
                       </td>
 
                       {/* % ADERÊNCIA WITH STATUS ICON */}
-                      <td className="px-2 py-2.5 text-center border-r border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center justify-center space-x-1.5 font-black">
+                      <td className="px-2 py-1.5 text-center border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
+                        <div className="flex items-center justify-center space-x-1 font-bold">
                           {renderPercentIcon(item.percentual)}
                           <span className={item.percentual >= 80 ? 'text-emerald-700 dark:text-emerald-400' : item.percentual >= 50 ? 'text-amber-700 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}>
                             {item.percentual}%
@@ -1131,12 +1156,17 @@ export const TabuladorView: React.FC = () => {
 
             {/* EXCEL-STYLE DEDICATED TABLE WITH HEADER FILTERS */}
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
-              <div className="border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+              <div className="border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto min-h-[400px]">
                 <table className="w-full text-left border-collapse text-[10px] whitespace-nowrap">
                   <thead>
                     <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase border-b border-slate-700">
                       <th className="p-1.5 border-r border-slate-700">
-                        MATRÍCULA DP
+                        <ExcelMultiSelectFilter
+                          label="MATRÍCULA DP"
+                          options={optionsMatDP}
+                          selectedValues={colFilterMatDP}
+                          onChange={setColFilterMatDP}
+                        />
                       </th>
                       <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
@@ -1194,7 +1224,22 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterLocal}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 text-center text-slate-300 font-extrabold uppercase">DATA / HORA</th>
+                      <th className="p-1.5 border-r border-slate-700">
+                        <ExcelMultiSelectFilter
+                          label="DATA"
+                          options={optionsData}
+                          selectedValues={colFilterData}
+                          onChange={setColFilterData}
+                        />
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700">
+                        <ExcelMultiSelectFilter
+                          label="HORA"
+                          options={optionsHora}
+                          selectedValues={colFilterHora}
+                          onChange={setColFilterHora}
+                        />
+                      </th>
                       <th className="p-1.5 text-center">
                         <ExcelMultiSelectFilter
                           label="STATUS PRESENÇA"
@@ -1210,7 +1255,7 @@ export const TabuladorView: React.FC = () => {
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
                     {filteredAlignmentOperators.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-8 text-center text-slate-400 italic">
+                        <td colSpan={11} className="p-8 text-center text-slate-400 italic">
                           Nenhum operador corresponde aos filtros aplicados nesta consulta.
                         </td>
                       </tr>
@@ -1232,7 +1277,7 @@ export const TabuladorView: React.FC = () => {
                             <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-700 dark:text-indigo-400">
                               {displayLogin || 'N/A'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-normal text-slate-900 dark:text-white">
                               {op.nome}
                             </td>
                             <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
@@ -1244,17 +1289,20 @@ export const TabuladorView: React.FC = () => {
                             <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600">
                               {op.segmento || viewingFullAlignment.celula}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-medium text-indigo-800 dark:text-indigo-300">
-                              {op.multiplicador || 'T&D/BB'}
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-normal text-indigo-800 dark:text-indigo-300 whitespace-nowrap">
+                              {formatShortName(op.multiplicador || 'T&D/BB')}
                             </td>
                             <td className="p-1.5 border-r border-slate-200 dark:border-slate-700">
                               {op.local || 'Ilha Operacional'}
                             </td>
-                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px]">
-                              {op.dataPresenca || viewingFullAlignment.data} {op.horario || ''}
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px] whitespace-nowrap">
+                              {op.dataPresenca || viewingFullAlignment.data}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px] whitespace-nowrap">
+                              {op.horario || 'N/A'}
                             </td>
                             <td className="p-1.5 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                 op.statusPresenca === 'Presente' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
                                 op.statusPresenca === 'Dispensado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
                                 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
@@ -1510,88 +1558,19 @@ export const TabuladorView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Célula / Segmento:</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.celula}
-                    onChange={(e) => setFormData({ ...formData, celula: e.target.value })}
-                    placeholder="Ex: SAC PRIORITÁRIO ou Selecione abaixo"
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
-                  />
-                  <div className="flex flex-wrap gap-1 mt-1 max-h-20 overflow-y-auto pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, celula: 'TODAS AS CÉLULAS' })}
-                      className="text-[10px] px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold rounded hover:bg-indigo-200"
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Célula / Segmento Alvo:</label>
+                  <div className="relative">
+                    <select
+                      value={formData.celula}
+                      onChange={(e) => setFormData({ ...formData, celula: e.target.value })}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white text-xs"
                     >
-                      + TODAS
-                    </button>
-                    {celulas.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          if (formData.celula === 'TODOS' || formData.celula === 'TODAS AS CÉLULAS') {
-                            setFormData({ ...formData, celula: c.nome });
-                          } else if (formData.celula.includes(c.nome)) {
-                            // toggle off
-                            const parts = formData.celula.split(', ').filter(p => p !== c.nome);
-                            setFormData({ ...formData, celula: parts.join(', ') || 'TODAS' });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              celula: formData.celula ? `${formData.celula}, ${c.nome}` : c.nome
-                            });
-                          }
-                        }}
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${
-                          formData.celula.includes(c.nome) 
-                            ? 'bg-indigo-600 text-white font-bold' 
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                      >
-                        {c.nome}
-                      </button>
-                    ))}
+                      <option value="TODAS AS CÉLULAS">TODAS AS CÉLULAS</option>
+                      {celulas.map(c => (
+                        <option key={c.id} value={c.nome}>{c.nome}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Convocados:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.convocados}
-                    onChange={(e) => setFormData({ ...formData, convocados: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-emerald-700 dark:text-emerald-400 mb-1">Presentes:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.presentes}
-                    onChange={(e) => setFormData({ ...formData, presentes: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-500 mb-1">Dispensados:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.dispensado}
-                    onChange={(e) => setFormData({ ...formData, dispensado: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
-                  />
                 </div>
               </div>
 
@@ -1601,23 +1580,11 @@ export const TabuladorView: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: 0:20:00"
+                    placeholder="HH:MM:SS (Ex: 0:20:00)"
                     value={formData.cargaHoraria}
                     onChange={(e) => setFormData({ ...formData, cargaHoraria: e.target.value })}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono font-bold text-slate-900 dark:text-white"
                   />
-                  <div className="flex gap-1 mt-1">
-                    {['0:15:00', '0:20:00', '0:30:00', '1:00:00', '2:00:00'].map(ch => (
-                      <button
-                        key={ch}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, cargaHoraria: ch })}
-                        className="text-[9px] px-1 py-0.5 bg-slate-100 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-indigo-950 text-slate-700 dark:text-slate-300 font-mono rounded"
-                      >
-                        {ch.slice(0, 4)}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 <div>
@@ -1627,7 +1594,7 @@ export const TabuladorView: React.FC = () => {
                     required
                     value={formData.data}
                     onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white"
                   />
                 </div>
               </div>

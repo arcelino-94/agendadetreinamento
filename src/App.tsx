@@ -21,6 +21,7 @@ import { NovaTurmaModal } from './components/NovaTurmaModal';
 import { ReservarSalaModal } from './components/ReservarSalaModal';
 import { TurmaDetalhesModal } from './components/TurmaDetalhesModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
+import { CloudSyncToast } from './components/CloudSyncToast';
 
 import { Demanda, Turma } from './types';
 
@@ -197,6 +198,9 @@ export function AppContent() {
         isOpen={isFirebaseModalOpen}
         onClose={() => setIsFirebaseModalOpen(false)}
       />
+
+      {/* Floating Cloud Sync Toast */}
+      <CloudSyncToast />
 
     </div>
   );

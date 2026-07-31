@@ -9,7 +9,10 @@ import {
   Clock, 
   Bell, 
   Users,
-  Building2
+  Building2,
+  CloudCheck,
+  Loader2,
+  Cloud
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getDeadlineAlerts } from '../lib/planningEngine';
@@ -33,6 +36,9 @@ export const Header: React.FC<HeaderProps> = ({
     isDarkMode, 
     setIsDarkMode, 
     isFirebaseConnected,
+    saveStatus,
+    lastSyncTime,
+    forceSaveToCloud,
     demandas,
     setActiveTab
   } = useApp();
@@ -65,6 +71,30 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Controls & Quick Actions */}
           <div className="flex items-center space-x-1.5 sm:space-x-2">
             
+            {/* Cloud Sync Status Indicator */}
+            <button
+              onClick={() => forceSaveToCloud()}
+              className="flex items-center space-x-1.5 bg-white/10 hover:bg-white/20 active:scale-95 px-2.5 py-1 rounded-md border border-white/15 text-xs text-white transition-all cursor-pointer"
+              title="Clique para Forçar Sincronização e Salvar na Nuvem"
+            >
+              {saveStatus === 'saving' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+                  <span className="text-[11px] font-semibold text-amber-200 hidden sm:inline">Salvando...</span>
+                </>
+              ) : saveStatus === 'saved' ? (
+                <>
+                  <CloudCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span className="text-[11px] font-semibold text-emerald-200 hidden sm:inline">Nuvem Salva</span>
+                </>
+              ) : (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-indigo-200" />
+                  <span className="text-[11px] font-semibold text-indigo-100 hidden sm:inline">Sincronizar Nuvem</span>
+                </>
+              )}
+            </button>
+
             {/* Seletor de Data */}
             <div className="hidden lg:flex items-center space-x-1.5 bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-md border border-white/15 text-xs font-medium text-white">
               <Calendar className="w-3.5 h-3.5 text-indigo-200" />

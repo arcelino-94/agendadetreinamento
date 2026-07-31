@@ -25,7 +25,7 @@ export const AssistentePlanejamentoView: React.FC<AssistentePlanejamentoViewProp
   const [selectedTab, setSelectedTab] = useState<'agrupamentos' | 'encaixes' | 'alertas'>('agrupamentos');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status !== 'Ausente' && m.status !== 'Férias');
 
   // Análises do motor
   const agrupamentos = detectSmartGroupings(demandas, multiplicadoresAtivos, salas);

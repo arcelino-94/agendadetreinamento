@@ -60,6 +60,10 @@ export interface Demanda {
   anexos?: string[];
   turmaAgendadaId?: string;
   dataCriacao: string;
+  dataInicio?: string;
+  dataFim?: string;
+  multiplicadorId?: string;
+  multiplicadorNome?: string;
 }
 
 export interface Turma {

@@ -19,7 +19,7 @@ import {
   INITIAL_TABULADOR
 } from '../data/mockData';
 import { isOverlapping } from '../lib/planningEngine';
-import { DEFAULT_FIREBASE_CONFIG, saveStateToFirestore, subscribeToFirestore } from '../lib/firebase';
+import { DEFAULT_FIREBASE_CONFIG, saveStateToFirestore, loadStateFromFirestore, subscribeToFirestore } from '../lib/firebase';
 
 interface AppContextType {
   multiplicadores: Multiplicador[];
@@ -36,10 +36,17 @@ interface AppContextType {
   isDarkMode: boolean;
   setIsDarkMode: (dark: boolean) => void;
   
-  // Custom Firebase Status
+  // Custom Firebase Status & Sync Notifications
   isFirebaseConnected: boolean;
   firebaseConfig: FirebaseConfigCustom | null;
   setFirebaseConfig: (config: FirebaseConfigCustom | null) => void;
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  isSaving: boolean;
+  lastSyncTime: string | null;
+
+  // Cloud force sync functions
+  forceSaveToCloud: () => Promise<boolean>;
+  forceReloadFromCloud: () => Promise<boolean>;
 
   // Security & Passwords
   securityPassword: string;
@@ -130,9 +137,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [operadores, setOperadores] = useState<OperadorQuadro[]>([]);
   const [tabulador, setTabulador] = useState<AlinhamentoTabulador[]>([]);
 
-  // Firebase
+  // Firebase & Sync Status
   const [firebaseConfig, setFirebaseConfigState] = useState<FirebaseConfigCustom | null>(null);
-  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(false);
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  const isSaving = saveStatus === 'saving';
 
   // Helper to normalize tabulador data schema safely
   const sanitizeTabuladorData = (items: any[]): AlinhamentoTabulador[] => {
@@ -247,11 +258,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bc.postMessage({ type: 'DATA_UPDATED', data });
         bc.close();
       }
-      saveStateToFirestore(data);
+      setSaveStatus('saving');
+      saveStateToFirestore(data, firebaseConfig || DEFAULT_FIREBASE_CONFIG).then((success) => {
+        if (success) {
+          setSaveStatus('saved');
+          setLastSyncTime(new Date().toLocaleTimeString());
+          setTimeout(() => {
+            setSaveStatus('idle');
+          }, 2500);
+        } else {
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+      }).catch(() => {
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      });
     } catch (err) {
       console.error('Erro ao persistir estado:', err);
+      setSaveStatus('error');
     }
-  }, []);
+  }, [firebaseConfig]);
 
   // Listener Firestore em Tempo Real
   useEffect(() => {
@@ -266,26 +293,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (Array.isArray(data.operadores)) setOperadores(data.operadores);
         if (Array.isArray(data.tabulador)) setTabulador(data.tabulador);
 
-        // Manter o localStorage localmente sincronizado com o snapshot da nuvem
+        // Sync local storage with current cloud snapshot
         try {
-          const currentLocal = localStorage.getItem(LOCAL_STORAGE_KEY);
-          const parsedLocal = currentLocal ? JSON.parse(currentLocal) : {};
           const merged = {
-            ...parsedLocal,
-            ...(Array.isArray(data.multiplicadores) && { multiplicadores: data.multiplicadores }),
-            ...(Array.isArray(data.celulas) && { celulas: data.celulas }),
-            ...(Array.isArray(data.salas) && { salas: data.salas }),
-            ...(Array.isArray(data.demandas) && { demandas: data.demandas }),
-            ...(Array.isArray(data.turmas) && { turmas: data.turmas }),
-            ...(Array.isArray(data.operadores) && { operadores: data.operadores }),
-            ...(Array.isArray(data.tabulador) && { tabulador: data.tabulador }),
+            multiplicadores: data.multiplicadores || [],
+            celulas: data.celulas || [],
+            salas: data.salas || [],
+            demandas: data.demandas || [],
+            turmas: data.turmas || [],
+            operadores: data.operadores || [],
+            tabulador: data.tabulador || [],
           };
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
         } catch (e) {
           console.warn('Erro ao atualizar localStorage com snapshot:', e);
         }
-      } else {
-        // Se a nuvem estiver vazia, subir o estado inicial para o Firestore
+
+        setSaveStatus('saved');
+        setLastSyncTime(new Date().toLocaleTimeString());
+        setTimeout(() => setSaveStatus('idle'), 2500);
+      } else if (data === null) {
+        // Se a nuvem estiver vazia/inexistente, enviar estado inicial para criar o documento Firestore
         saveStateToFirestore({
           multiplicadores,
           celulas,
@@ -294,7 +322,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           turmas,
           operadores,
           tabulador
-        });
+        }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
       }
     }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
 
@@ -313,6 +341,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsFirebaseConnected(false);
     }
   };
+
+  // Forçar Salvamento Manual na Nuvem
+  const forceSaveToCloud = useCallback(async (): Promise<boolean> => {
+    const currentState = {
+      multiplicadores,
+      celulas,
+      salas,
+      demandas,
+      turmas,
+      operadores,
+      tabulador,
+    };
+    setSaveStatus('saving');
+    const success = await saveStateToFirestore(currentState, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+    if (success) {
+      setSaveStatus('saved');
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } else {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+    return success;
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, firebaseConfig]);
+
+  // Forçar Carregamento Manual da Nuvem (Sobrescrever local)
+  const forceReloadFromCloud = useCallback(async (): Promise<boolean> => {
+    setSaveStatus('saving');
+    const cloudData = await loadStateFromFirestore(firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+    if (cloudData) {
+      if (Array.isArray(cloudData.multiplicadores)) setMultiplicadores(cloudData.multiplicadores);
+      if (Array.isArray(cloudData.celulas)) setCelulas(cloudData.celulas);
+      if (Array.isArray(cloudData.salas)) setSalas(cloudData.salas);
+      if (Array.isArray(cloudData.demandas)) setDemandas(cloudData.demandas);
+      if (Array.isArray(cloudData.turmas)) setTurmas(cloudData.turmas);
+      if (Array.isArray(cloudData.operadores)) setOperadores(cloudData.operadores);
+      if (Array.isArray(cloudData.tabulador)) setTabulador(cloudData.tabulador);
+
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+          multiplicadores: cloudData.multiplicadores || [],
+          celulas: cloudData.celulas || [],
+          salas: cloudData.salas || [],
+          demandas: cloudData.demandas || [],
+          turmas: cloudData.turmas || [],
+          operadores: cloudData.operadores || [],
+          tabulador: cloudData.tabulador || [],
+        }));
+      } catch (e) {
+        console.warn('Erro ao atualizar localStorage:', e);
+      }
+
+      setSaveStatus('saved');
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setTimeout(() => setSaveStatus('idle'), 2500);
+      return true;
+    } else {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+      return false;
+    }
+  }, [firebaseConfig]);
 
   // Validação de Conflito de Sala
   const checkRoomConflict = (
@@ -778,6 +868,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isFirebaseConnected,
         firebaseConfig,
         setFirebaseConfig,
+        saveStatus,
+        isSaving,
+        lastSyncTime,
+        forceSaveToCloud,
+        forceReloadFromCloud,
         securityPassword,
         setSecurityPassword,
         validatePassword,

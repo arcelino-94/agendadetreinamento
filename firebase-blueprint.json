@@ -1,0 +1,23 @@
+{
+  "entities": {
+    "treinamentos_td": {
+      "title": "Treinamentos T&D Call Center",
+      "description": "Estado global sincronizado do sistema de gestão T&D",
+      "type": "object",
+      "properties": {
+        "multiplicadores": { "type": "array" },
+        "celulas": { "type": "array" },
+        "salas": { "type": "array" },
+        "demandas": { "type": "array" },
+        "turmas": { "type": "array" },
+        "operadores": { "type": "array" },
+        "tabulador": { "type": "array" },
+        "lastUpdated": { "type": "string" }
+      }
+    }
+  },
+  "rules": {
+    "read": "true",
+    "write": "true"
+  }
+}
