@@ -245,8 +245,9 @@ export const TabuladorView: React.FC = () => {
     getOperadorByLogin
   } = useApp();
 
-  // Selected Month Filter (default 'jul/26')
-  const [selectedMonth, setSelectedMonth] = useState('jul/26');
+  // Selected Month and Year Picklists (default '07' / '2026')
+  const [selectedMonthNum, setSelectedMonthNum] = useState<string>('todos');
+  const [selectedYear, setSelectedYear] = useState<string>('todos');
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -256,23 +257,13 @@ export const TabuladorView: React.FC = () => {
   const [tabFilterTreinamento, setTabFilterTreinamento] = useState<string[]>([]);
   const [tabFilterSolicitante, setTabFilterSolicitante] = useState<string[]>([]);
   const [tabFilterCelula, setTabFilterCelula] = useState<string[]>([]);
-  const [tabFilterStatus, setTabFilterStatus] = useState<string[]>([]);
-
-  // Helper to parse item date into 'mon/yy' string
-  const getDateMonthKey = (dateStr?: string): string => {
-    if (!dateStr) return 'jul/26';
-    if (dateStr.includes('/')) return dateStr.toLowerCase();
-    const parts = dateStr.split('-');
-    if (parts.length >= 2) {
-      const yearStr = parts[0].slice(-2);
-      const monthIdx = parseInt(parts[1], 10) - 1;
-      const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-      if (monthIdx >= 0 && monthIdx < 12) {
-        return `${monthNames[monthIdx]}/${yearStr}`;
-      }
-    }
-    return dateStr.toLowerCase();
-  };
+  const [tabFilterConvocados, setTabFilterConvocados] = useState<string[]>([]);
+  const [tabFilterPresentes, setTabFilterPresentes] = useState<string[]>([]);
+  const [tabFilterDispensado, setTabFilterDispensado] = useState<string[]>([]);
+  const [tabFilterPendentes, setTabFilterPendentes] = useState<string[]>([]);
+  const [tabFilterHorasTrein, setTabFilterHorasTrein] = useState<string[]>([]);
+  const [tabFilterCH, setTabFilterCH] = useState<string[]>([]);
+  const [tabFilterPercentual, setTabFilterPercentual] = useState<string[]>([]);
 
   // Add / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -283,6 +274,7 @@ export const TabuladorView: React.FC = () => {
     treinamento: '',
     solicitante: 'OPERAÇÃO / T&D/BB',
     celula: 'SAC PRIORITÁRIO',
+    selectedCelulas: ['SAC PRIORITÁRIO'] as string[],
     convocados: 20,
     presentes: 20,
     dispensado: 0,
@@ -336,7 +328,13 @@ export const TabuladorView: React.FC = () => {
   const optionsTabTreinamento = useMemo(() => Array.from(new Set(tabulador.map(t => t.treinamento).filter(Boolean))).sort(), [tabulador]);
   const optionsTabSolicitante = useMemo(() => Array.from(new Set(tabulador.map(t => t.solicitante || 'OPERAÇÃO / T&D/BB'))).sort(), [tabulador]);
   const optionsTabCelula = useMemo(() => Array.from(new Set(tabulador.map(t => t.celula).filter(Boolean))).sort(), [tabulador]);
-  const optionsTabStatus = useMemo(() => Array.from(new Set(tabulador.map(t => t.status || 'Concluído'))).sort(), [tabulador]);
+  const optionsTabConvocados = useMemo(() => Array.from(new Set(tabulador.map(t => String(t.convocados)))).sort(), [tabulador]);
+  const optionsTabPresentes = useMemo(() => Array.from(new Set(tabulador.map(t => String(t.presentes)))).sort(), [tabulador]);
+  const optionsTabDispensado = useMemo(() => Array.from(new Set(tabulador.map(t => String(t.dispensado)))).sort(), [tabulador]);
+  const optionsTabPendentes = useMemo(() => Array.from(new Set(tabulador.map(t => String(t.pendentes)))).sort(), [tabulador]);
+  const optionsTabHorasTrein = useMemo(() => Array.from(new Set(tabulador.map(t => t.horasTreinamento || '0:00:00'))).sort(), [tabulador]);
+  const optionsTabCH = useMemo(() => Array.from(new Set(tabulador.map(t => t.cargaHoraria || '0:00:00'))).sort(), [tabulador]);
+  const optionsTabPercentual = useMemo(() => Array.from(new Set(tabulador.map(t => `${t.percentual}%`))).sort(), [tabulador]);
 
   // Computed filtered Tabulador list
   const filteredTabulador = useMemo(() => {
@@ -352,25 +350,59 @@ export const TabuladorView: React.FC = () => {
         celulaStr.includes(q);
 
       const matchCelula = selectedCelula === 'todos' || celulaStr.includes(selectedCelula.toLowerCase());
-      const itemMonthKey = getDateMonthKey(item.data);
-      const matchMonth = selectedMonth === 'todos' || itemMonthKey === selectedMonth.toLowerCase() || (item.data && item.data.toLowerCase().includes(selectedMonth.toLowerCase()));
+
+      // Date parsing for month and year picklists
+      let itemMonth = '';
+      let itemYear = '';
+      if (item.data) {
+        if (item.data.includes('-')) {
+          const parts = item.data.split('-');
+          itemYear = parts[0];
+          itemMonth = parts[1]?.padStart(2, '0') || '';
+        } else if (item.data.includes('/')) {
+          const [mStr, yStr] = item.data.toLowerCase().split('/');
+          const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+          const idx = monthNames.indexOf(mStr);
+          if (idx >= 0) itemMonth = (idx + 1).toString().padStart(2, '0');
+          if (yStr) itemYear = yStr.length === 2 ? `20${yStr}` : yStr;
+        }
+      }
+
+      const matchMonth = selectedMonthNum === 'todos' || 
+        (selectedMonthNum === 'em_branco' ? !itemMonth : itemMonth === selectedMonthNum);
+
+      const matchYear = selectedYear === 'todos' || 
+        (selectedYear === 'em_branco' ? !itemYear : itemYear === selectedYear);
 
       const matchTabTrein = tabFilterTreinamento.length === 0 || tabFilterTreinamento.includes(item.treinamento);
       const matchTabSolic = tabFilterSolicitante.length === 0 || tabFilterSolicitante.includes(item.solicitante || 'OPERAÇÃO / T&D/BB');
       const matchTabCel = tabFilterCelula.length === 0 || tabFilterCelula.includes(item.celula);
-      const matchTabStat = tabFilterStatus.length === 0 || tabFilterStatus.includes(item.status);
+      const matchTabConv = tabFilterConvocados.length === 0 || tabFilterConvocados.includes(String(item.convocados));
+      const matchTabPres = tabFilterPresentes.length === 0 || tabFilterPresentes.includes(String(item.presentes));
+      const matchTabDisp = tabFilterDispensado.length === 0 || tabFilterDispensado.includes(String(item.dispensado));
+      const matchTabPend = tabFilterPendentes.length === 0 || tabFilterPendentes.includes(String(item.pendentes));
+      const matchTabHoras = tabFilterHorasTrein.length === 0 || tabFilterHorasTrein.includes(item.horasTreinamento || '0:00:00');
+      const matchTabCH = tabFilterCH.length === 0 || tabFilterCH.includes(item.cargaHoraria || '0:00:00');
+      const matchTabPct = tabFilterPercentual.length === 0 || tabFilterPercentual.includes(`${item.percentual}%`);
 
-      return matchSearch && matchCelula && matchMonth && matchTabTrein && matchTabSolic && matchTabCel && matchTabStat;
+      return matchSearch && matchCelula && matchMonth && matchYear && matchTabTrein && matchTabSolic && matchTabCel && matchTabConv && matchTabPres && matchTabDisp && matchTabPend && matchTabHoras && matchTabCH && matchTabPct;
     });
   }, [
     tabulador, 
     searchTerm, 
     selectedCelula, 
-    selectedMonth, 
+    selectedMonthNum, 
+    selectedYear,
     tabFilterTreinamento, 
     tabFilterSolicitante, 
     tabFilterCelula, 
-    tabFilterStatus
+    tabFilterConvocados,
+    tabFilterPresentes,
+    tabFilterDispensado,
+    tabFilterPendentes,
+    tabFilterHorasTrein,
+    tabFilterCH,
+    tabFilterPercentual
   ]);
 
   // Options for Viewing Operators Modal
@@ -610,20 +642,30 @@ export const TabuladorView: React.FC = () => {
   const handleExportAlignmentCSV = () => {
     if (!viewingFullAlignment) return;
     const headers = ['MAT_DP', 'LOGIN_BB', 'NOME', 'SUPERVISOR', 'GERENTE', 'CELULA', 'DATA', 'HORA', 'MULTIPLICADOR', 'LOCAL', 'STATUS', 'MOTIVO_AUSENCIA'];
-    const rows = filteredAlignmentOperators.map(op => [
-      `"${op.matDP || 'N/A'}"`,
-      `"${op.loginBB}"`,
-      `"${op.nome.replace(/"/g, '""')}"`,
-      `"${(op.supervisor || '').replace(/"/g, '""')}"`,
-      `"${(op.gerente || '').replace(/"/g, '""')}"`,
-      `"${(op.segmento || '').replace(/"/g, '""')}"`,
-      `"${op.dataPresenca || viewingFullAlignment.data}"`,
-      `"${op.horario || 'N/A'}"`,
-      `"${(op.multiplicador || 'T&D/BB').replace(/"/g, '""')}"`,
-      `"${(op.local || 'Ilha').replace(/"/g, '""')}"`,
-      `"${op.statusPresenca || 'Presente'}"`,
-      `"${(op.tipoAusencia || '').replace(/"/g, '""')}"`
-    ]);
+    const rows = filteredAlignmentOperators.map(op => {
+      let displayLogin = op.loginBB || '';
+      let displayMat = op.matDP || '';
+      if (displayMat.toUpperCase().startsWith('C') && !displayLogin.toUpperCase().startsWith('C')) {
+        const tmp = displayLogin;
+        displayLogin = displayMat;
+        displayMat = tmp;
+      }
+
+      return [
+        `"${displayMat || 'N/A'}"`,
+        `"${displayLogin}"`,
+        `"${op.nome.replace(/"/g, '""')}"`,
+        `"${(op.supervisor || '').replace(/"/g, '""')}"`,
+        `"${(op.gerente || '').replace(/"/g, '""')}"`,
+        `"${(op.segmento || '').replace(/"/g, '""')}"`,
+        `"${op.dataPresenca || viewingFullAlignment.data}"`,
+        `"${op.horario || 'N/A'}"`,
+        `"${(op.multiplicador || 'T&D/BB').replace(/"/g, '""')}"`,
+        `"${(op.local || 'Ilha').replace(/"/g, '""')}"`,
+        `"${op.statusPresenca || 'Presente'}"`,
+        `"${(op.tipoAusencia || '').replace(/"/g, '""')}"`
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -655,7 +697,7 @@ export const TabuladorView: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Tabulador_Treinamentos_${selectedMonth.replace('/', '_')}.csv`);
+    link.setAttribute('download', `Tabulador_Treinamentos_${selectedMonthNum}_${selectedYear}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -734,31 +776,47 @@ export const TabuladorView: React.FC = () => {
             />
           </div>
 
-          {/* Month Selector next to Search Field */}
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          {/* Month & Year Selectors next to Search Field */}
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0 flex items-center space-x-1">
               <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Mês:</span>
+              <span>Período:</span>
             </span>
+
+            {/* Mês Picklist */}
             <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full sm:w-40 px-2.5 py-1.5 border border-amber-300 dark:border-amber-700/60 rounded-lg text-xs bg-amber-50 dark:bg-slate-800 text-slate-900 dark:text-amber-200 outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold uppercase"
+              value={selectedMonthNum}
+              onChange={(e) => setSelectedMonthNum(e.target.value)}
+              className="px-2 py-1.5 border border-amber-300 dark:border-amber-700/60 rounded-lg text-xs bg-amber-50 dark:bg-slate-800 text-slate-900 dark:text-amber-200 outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold uppercase"
             >
-              <option value="jul/26">JULHO 2026 (jul/26)</option>
-              <option value="jun/26">JUNHO 2026 (jun/26)</option>
-              <option value="mai/26">MAIO 2026 (mai/26)</option>
-              <option value="abr/26">ABRIL 2026 (abr/26)</option>
-              <option value="mar/26">MARÇO 2026 (mar/26)</option>
-              <option value="fev/26">FEVEREIRO 2026 (fev/26)</option>
-              <option value="jan/26">JANEIRO 2026 (jan/26)</option>
-              <option value="dez/25">DEZEMBRO 2025 (dez/25)</option>
-              <option value="nov/25">NOVEMBRO 2025 (nov/25)</option>
-              <option value="out/25">OUTUBRO 2025 (out/25)</option>
-              <option value="set/25">SETEMBRO 2025 (set/25)</option>
-              <option value="ago/25">AGOSTO 2025 (ago/25)</option>
-              <option value="jul/25">JULHO 2025 (jul/25)</option>
               <option value="todos">TODOS OS MESES</option>
+              <option value="01">01 - JANEIRO</option>
+              <option value="02">02 - FEVEREIRO</option>
+              <option value="03">03 - MARÇO</option>
+              <option value="04">04 - ABRIL</option>
+              <option value="05">05 - MAIO</option>
+              <option value="06">06 - JUNHO</option>
+              <option value="07">07 - JULHO</option>
+              <option value="08">08 - AGOSTO</option>
+              <option value="09">09 - SETEMBRO</option>
+              <option value="10">10 - OUTUBRO</option>
+              <option value="11">11 - NOVEMBRO</option>
+              <option value="12">12 - DEZEMBRO</option>
+              <option value="em_branco">MÊS EM BRANCO</option>
+            </select>
+
+            {/* Ano Picklist */}
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="px-2 py-1.5 border border-amber-300 dark:border-amber-700/60 rounded-lg text-xs bg-amber-50 dark:bg-slate-800 text-slate-900 dark:text-amber-200 outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold uppercase"
+            >
+              <option value="todos">TODOS OS ANOS</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2027">2027</option>
+              <option value="em_branco">ANO EM BRANCO</option>
             </select>
           </div>
 
@@ -768,7 +826,7 @@ export const TabuladorView: React.FC = () => {
             <select
               value={selectedCelula}
               onChange={(e) => setSelectedCelula(e.target.value)}
-              className="w-full sm:w-48 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
+              className="w-full sm:w-44 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
             >
               <option value="todos">Todas Células ({tabulador.length})</option>
               {celulas.map(c => (
@@ -790,13 +848,13 @@ export const TabuladorView: React.FC = () => {
         </div>
       </div>
 
-      {/* SPREADSHEET TABLE */}
+      {/* SPREADSHEET TABLE - COMPACT WITHOUT HORIZONTAL OVERFLOW */}
       <div className="bg-white dark:bg-slate-900 border-2 border-indigo-900 dark:border-indigo-800 rounded-xl shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse font-sans text-xs">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left border-collapse font-sans text-[11px]">
             <thead>
-              <tr className="bg-indigo-900 dark:bg-slate-950 text-white text-[11px] font-black uppercase tracking-wider border-b-2 border-yellow-400">
-                <th className="px-2 py-2 w-80 border-r border-indigo-800/80">
+              <tr className="bg-indigo-900 dark:bg-slate-950 text-white text-[10px] font-black uppercase tracking-wider border-b-2 border-yellow-400">
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
                   <ExcelMultiSelectFilter
                     label="Treinamento"
                     options={optionsTabTreinamento}
@@ -804,7 +862,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterTreinamento}
                   />
                 </th>
-                <th className="px-2 py-2 w-44 border-r border-indigo-800/80">
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
                   <ExcelMultiSelectFilter
                     label="Solicitante"
                     options={optionsTabSolicitante}
@@ -812,7 +870,7 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterSolicitante}
                   />
                 </th>
-                <th className="px-2 py-2 w-48 border-r border-indigo-800/80">
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
                   <ExcelMultiSelectFilter
                     label="Célula"
                     options={optionsTabCelula}
@@ -820,14 +878,63 @@ export const TabuladorView: React.FC = () => {
                     onChange={setTabFilterCelula}
                   />
                 </th>
-                <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">CONVOCADOS</th>
-                <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">PRESENTES</th>
-                <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">DISPENSADO</th>
-                <th className="px-2.5 py-3 text-center w-24 border-r border-indigo-800/80">PENDENTES</th>
-                <th className="px-3 py-3 text-center w-28 border-r border-indigo-800/80">HORAS TREIN.</th>
-                <th className="px-2.5 py-3 text-center w-20 border-r border-indigo-800/80">CH</th>
-                <th className="px-2 py-3 text-center w-20 border-r border-indigo-800/80">%</th>
-                <th className="px-3 py-3 text-center w-28">INCLUIR EM MASSA / AÇÕES</th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Convocados"
+                    options={optionsTabConvocados}
+                    selectedValues={tabFilterConvocados}
+                    onChange={setTabFilterConvocados}
+                  />
+                </th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Presentes"
+                    options={optionsTabPresentes}
+                    selectedValues={tabFilterPresentes}
+                    onChange={setTabFilterPresentes}
+                  />
+                </th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Dispensado"
+                    options={optionsTabDispensado}
+                    selectedValues={tabFilterDispensado}
+                    onChange={setTabFilterDispensado}
+                  />
+                </th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Pendentes"
+                    options={optionsTabPendentes}
+                    selectedValues={tabFilterPendentes}
+                    onChange={setTabFilterPendentes}
+                  />
+                </th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="Horas Trein."
+                    options={optionsTabHorasTrein}
+                    selectedValues={tabFilterHorasTrein}
+                    onChange={setTabFilterHorasTrein}
+                  />
+                </th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="CH"
+                    options={optionsTabCH}
+                    selectedValues={tabFilterCH}
+                    onChange={setTabFilterCH}
+                  />
+                </th>
+                <th className="px-1.5 py-1.5 border-r border-indigo-800/80">
+                  <ExcelMultiSelectFilter
+                    label="%"
+                    options={optionsTabPercentual}
+                    selectedValues={tabFilterPercentual}
+                    onChange={setTabFilterPercentual}
+                  />
+                </th>
+                <th className="px-2 py-1.5 text-center shrink-0 font-extrabold uppercase">AÇÕES</th>
               </tr>
             </thead>
 
@@ -967,7 +1074,7 @@ export const TabuladorView: React.FC = () => {
                   {viewingFullAlignment.treinamento}
                 </h2>
                 <p className="text-xs text-indigo-200 mt-0.5">
-                  Solicitante: <strong>{viewingFullAlignment.solicitante}</strong> | Horas Totais em Cabeça: <strong>{viewingFullAlignment.horasTreinamento}</strong>
+                  Solicitante: <strong>{viewingFullAlignment.solicitante}</strong> | Horas Totais Treinadas: <strong>{viewingFullAlignment.horasTreinamento}</strong>
                 </p>
               </div>
 
@@ -1022,20 +1129,23 @@ export const TabuladorView: React.FC = () => {
             </div>
 
             {/* EXCEL-STYLE DEDICATED TABLE WITH HEADER FILTERS */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3">
+            <div className="flex-1 min-h-0 overflow-y-auto p-2">
               <div className="border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-[10px] whitespace-nowrap">
                   <thead>
                     <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase border-b border-slate-700">
-                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                      <th className="p-1.5 border-r border-slate-700">
+                        MATRÍCULA DP
+                      </th>
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
-                          label="MAT DP / LOGIN"
+                          label="LOGIN BB"
                           options={optionsLogin}
                           selectedValues={colFilterLogin}
                           onChange={setColFilterLogin}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 min-w-48">
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
                           label="NOME OPERADOR"
                           options={optionsNome}
@@ -1043,7 +1153,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterNome}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
                           label="SUPERVISOR"
                           options={optionsSupervisor}
@@ -1051,7 +1161,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterSupervisor}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
                           label="GERENTE"
                           options={optionsGerente}
@@ -1059,7 +1169,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterGerente}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 min-w-32">
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
                           label="SEGMENTO"
                           options={optionsSegmento}
@@ -1067,7 +1177,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterSegmento}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 min-w-36">
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
                           label="MULTIPLICADOR"
                           options={optionsMultiplicador}
@@ -1075,7 +1185,7 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterMultiplicador}
                         />
                       </th>
-                      <th className="p-1.5 border-r border-slate-700 min-w-28">
+                      <th className="p-1.5 border-r border-slate-700">
                         <ExcelMultiSelectFilter
                           label="LOCAL"
                           options={optionsLocal}
@@ -1083,8 +1193,8 @@ export const TabuladorView: React.FC = () => {
                           onChange={setColFilterLocal}
                         />
                       </th>
-                      <th className="p-2 border-r border-slate-700 min-w-24 text-center text-slate-300 font-extrabold uppercase">DATA / HORA</th>
-                      <th className="p-1.5 min-w-36 text-center">
+                      <th className="p-1.5 border-r border-slate-700 text-center text-slate-300 font-extrabold uppercase">DATA / HORA</th>
+                      <th className="p-1.5 text-center">
                         <ExcelMultiSelectFilter
                           label="STATUS PRESENÇA"
                           options={optionsStatus}
@@ -1099,48 +1209,61 @@ export const TabuladorView: React.FC = () => {
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
                     {filteredAlignmentOperators.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-8 text-center text-slate-400 italic">
+                        <td colSpan={10} className="p-8 text-center text-slate-400 italic">
                           Nenhum operador corresponde aos filtros aplicados nesta consulta.
                         </td>
                       </tr>
                     ) : (
-                      filteredAlignmentOperators.map((op, idx) => (
-                        <tr key={`${op.loginBB}-${idx}`} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60">
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-700 dark:text-indigo-400">
-                            {op.loginBB} <span className="text-[10px] text-slate-400 font-normal">({op.matDP || 'N/A'})</span>
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white">
-                            {op.nome}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                            {op.supervisor || 'N/A'}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-slate-500">
-                            {op.gerente || 'N/A'}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-slate-600">
-                            {op.segmento || viewingFullAlignment.celula}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-medium text-indigo-800 dark:text-indigo-300">
-                            {op.multiplicador || 'T&D/BB'}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700">
-                            {op.local || 'Ilha Operacional'}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px]">
-                            {op.dataPresenca || viewingFullAlignment.data} {op.horario || ''}
-                          </td>
-                          <td className="p-2 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                              op.statusPresenca === 'Presente' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                              op.statusPresenca === 'Dispensado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
-                              'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                            }`}>
-                              {op.statusPresenca || 'Presente'} {op.tipoAusencia ? `(${op.tipoAusencia})` : ''}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                      filteredAlignmentOperators.map((op, idx) => {
+                        let displayLogin = op.loginBB || '';
+                        let displayMat = op.matDP || '';
+                        if (displayMat.toUpperCase().startsWith('C') && !displayLogin.toUpperCase().startsWith('C')) {
+                          const tmp = displayLogin;
+                          displayLogin = displayMat;
+                          displayMat = tmp;
+                        }
+
+                        return (
+                          <tr key={`${displayLogin}-${idx}`} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60">
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-slate-600 dark:text-slate-300">
+                              {displayMat || 'N/A'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                              {displayLogin || 'N/A'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white">
+                              {op.nome}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                              {op.supervisor || 'N/A'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-500">
+                              {op.gerente || 'N/A'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 text-slate-600">
+                              {op.segmento || viewingFullAlignment.celula}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-medium text-indigo-800 dark:text-indigo-300">
+                              {op.multiplicador || 'T&D/BB'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700">
+                              {op.local || 'Ilha Operacional'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-200 dark:border-slate-700 font-mono text-[10px]">
+                              {op.dataPresenca || viewingFullAlignment.data} {op.horario || ''}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                                op.statusPresenca === 'Presente' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                                op.statusPresenca === 'Dispensado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
+                                'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              }`}>
+                                {op.statusPresenca || 'Presente'} {op.tipoAusencia ? `(${op.tipoAusencia})` : ''}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -1387,16 +1510,50 @@ export const TabuladorView: React.FC = () => {
 
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Célula / Segmento:</label>
-                  <select
+                  <input
+                    type="text"
+                    required
                     value={formData.celula}
                     onChange={(e) => setFormData({ ...formData, celula: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white"
-                  >
-                    <option value="TODOS">TODOS</option>
+                    placeholder="Ex: SAC PRIORITÁRIO ou Selecione abaixo"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white"
+                  />
+                  <div className="flex flex-wrap gap-1 mt-1 max-h-20 overflow-y-auto pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, celula: 'TODAS AS CÉLULAS' })}
+                      className="text-[10px] px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold rounded hover:bg-indigo-200"
+                    >
+                      + TODAS
+                    </button>
                     {celulas.map(c => (
-                      <option key={c.id} value={c.nome}>{c.nome}</option>
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          if (formData.celula === 'TODOS' || formData.celula === 'TODAS AS CÉLULAS') {
+                            setFormData({ ...formData, celula: c.nome });
+                          } else if (formData.celula.includes(c.nome)) {
+                            // toggle off
+                            const parts = formData.celula.split(', ').filter(p => p !== c.nome);
+                            setFormData({ ...formData, celula: parts.join(', ') || 'TODAS' });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              celula: formData.celula ? `${formData.celula}, ${c.nome}` : c.nome
+                            });
+                          }
+                        }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${
+                          formData.celula.includes(c.nome) 
+                            ? 'bg-indigo-600 text-white font-bold' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {c.nome}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
               </div>
 
@@ -1440,20 +1597,26 @@ export const TabuladorView: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Carga Horária (CH):</label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: 0:20:00"
                     value={formData.cargaHoraria}
                     onChange={(e) => setFormData({ ...formData, cargaHoraria: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono text-slate-900 dark:text-white"
-                  >
-                    <option value="0:15:00">0:15:00 (15 min)</option>
-                    <option value="0:20:00">0:20:00 (20 min)</option>
-                    <option value="0:30:00">0:30:00 (30 min)</option>
-                    <option value="0:45:00">0:45:00 (45 min)</option>
-                    <option value="1:00:00">1:00:00 (1 hora)</option>
-                    <option value="2:00:00">2:00:00 (2 horas)</option>
-                    <option value="4:00:00">4:00:00 (4 horas)</option>
-                    <option value="8:00:00">8:00:00 (8 horas)</option>
-                  </select>
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono font-bold text-slate-900 dark:text-white"
+                  />
+                  <div className="flex gap-1 mt-1">
+                    {['0:15:00', '0:20:00', '0:30:00', '1:00:00', '2:00:00'].map(ch => (
+                      <button
+                        key={ch}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, cargaHoraria: ch })}
+                        className="text-[9px] px-1 py-0.5 bg-slate-100 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-indigo-950 text-slate-700 dark:text-slate-300 font-mono rounded"
+                      >
+                        {ch.slice(0, 4)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>

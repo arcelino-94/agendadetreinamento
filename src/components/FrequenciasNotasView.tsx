@@ -82,6 +82,8 @@ export const FrequenciasNotasView: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTipo, setSelectedTipo] = useState<string>('todos');
+  const [selectedMonth, setSelectedMonth] = useState<string>('TODOS');
+  const [selectedYear, setSelectedYear] = useState<string>('TODOS');
   const [activeCourse, setActiveCourse] = useState<ItemFrequenciaNota | null>(null);
 
   // Filtered items
@@ -92,9 +94,40 @@ export const FrequenciasNotasView: React.FC = () => {
         item.multiplicador.toLowerCase().includes(q) ||
         item.celulas.some(c => c.toLowerCase().includes(q));
       const matchTipo = selectedTipo === 'todos' || item.tipo === selectedTipo;
-      return matchSearch && matchTipo;
+
+      // Month/Year filter matching
+      let matchMonth = true;
+      let matchYear = true;
+
+      const dateStr = item.dataInicio || item.criadoEm;
+      if (dateStr) {
+        const d = new Date(dateStr);
+        const hasDate = !isNaN(d.getTime());
+        const itemMonth = hasDate ? (d.getMonth() + 1).toString() : '';
+        const itemYear = hasDate ? d.getFullYear().toString() : '';
+
+        if (selectedMonth === 'EM_BRANCO') {
+          matchMonth = !itemMonth;
+        } else if (selectedMonth !== 'TODOS') {
+          matchMonth = itemMonth === selectedMonth;
+        }
+
+        if (selectedYear === 'EM_BRANCO') {
+          matchYear = !itemYear;
+        } else if (selectedYear !== 'TODOS') {
+          matchYear = itemYear === selectedYear;
+        }
+      } else {
+        if (selectedMonth === 'EM_BRANCO') matchMonth = true;
+        else if (selectedMonth !== 'TODOS') matchMonth = false;
+
+        if (selectedYear === 'EM_BRANCO') matchYear = true;
+        else if (selectedYear !== 'TODOS') matchYear = false;
+      }
+
+      return matchSearch && matchTipo && matchMonth && matchYear;
     });
-  }, [items, searchTerm, selectedTipo]);
+  }, [items, searchTerm, selectedTipo, selectedMonth, selectedYear]);
 
   // Overall statistics
   const stats = useMemo(() => {
@@ -284,30 +317,73 @@ export const FrequenciasNotasView: React.FC = () => {
       </div>
 
       {/* CONTROL BAR */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto flex-1">
-          <div className="relative w-full sm:w-80">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto flex-1">
+          <div className="relative min-w-56 flex-1 sm:flex-none">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar por curso, multiplicador ou célula..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-9 pr-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
             />
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <div className="flex items-center space-x-1.5">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Programa:</span>
             <select
               value={selectedTipo}
               onChange={(e) => setSelectedTipo(e.target.value)}
-              className="w-full sm:w-44 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
+              className="px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold"
             >
               <option value="todos">Todos os Programas</option>
-              <option value="Novatos">Novatos (Onboarding)</option>
+              <option value="Novatos">Novatos</option>
               <option value="Sinergia">Sinergia</option>
               <option value="Migração">Migração</option>
+              <option value="Retorno LMG">Retorno LMG</option>
+            </select>
+          </div>
+
+          {/* MONTH PICKLIST */}
+          <div className="flex items-center space-x-1.5">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Mês:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold"
+            >
+              <option value="TODOS">TODOS OS MESES</option>
+              <option value="EM_BRANCO">MÊS EM BRANCO</option>
+              <option value="1">Janeiro (01)</option>
+              <option value="2">Fevereiro (02)</option>
+              <option value="3">Março (03)</option>
+              <option value="4">Abril (04)</option>
+              <option value="5">Maio (05)</option>
+              <option value="6">Junho (06)</option>
+              <option value="7">Julho (07)</option>
+              <option value="8">Agosto (08)</option>
+              <option value="9">Setembro (09)</option>
+              <option value="10">Outubro (10)</option>
+              <option value="11">Novembro (11)</option>
+              <option value="12">Dezembro (12)</option>
+            </select>
+          </div>
+
+          {/* YEAR PICKLIST */}
+          <div className="flex items-center space-x-1.5">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Ano:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold"
+            >
+              <option value="TODOS">TODOS OS ANOS</option>
+              <option value="EM_BRANCO">ANO EM BRANCO</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
             </select>
           </div>
         </div>
@@ -451,78 +527,90 @@ export const FrequenciasNotasView: React.FC = () => {
 
             {/* STUDENTS LIST TABLE */}
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase text-[10px] tracking-wider">
+              <table className="w-full text-left text-[11px] whitespace-nowrap">
+                <thead className="bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">
                   <tr>
-                    <th className="p-2.5">MAT DP / LOGIN</th>
-                    <th className="p-2.5">NOME OPERADOR</th>
-                    <th className="p-2.5">SUPERVISOR / CÉLULA</th>
-                    <th className="p-2.5 text-center">FREQUÊNCIA (%)</th>
-                    <th className="p-2.5 text-center">NOTA PROVA (0-100)</th>
-                    <th className="p-2.5 text-center">STATUS</th>
-                    <th className="p-2.5 text-right">AÇÃO</th>
+                    <th className="p-2 border-r border-slate-700">MATRÍCULA DP</th>
+                    <th className="p-2 border-r border-slate-700">LOGIN BB</th>
+                    <th className="p-2 border-r border-slate-700">NOME OPERADOR</th>
+                    <th className="p-2 border-r border-slate-700">CÉLULA</th>
+                    <th className="p-2 text-center border-r border-slate-700">FREQUÊNCIA (%)</th>
+                    <th className="p-2 text-center border-r border-slate-700">NOTA PROVA (0-100)</th>
+                    <th className="p-2 text-center border-r border-slate-700">STATUS</th>
+                    <th className="p-2 text-right">AÇÃO</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {editingAlunos.map((aluno) => (
-                    <tr key={aluno.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="p-2.5 font-mono text-slate-600 dark:text-slate-400">
-                        <span className="font-bold text-slate-900 dark:text-white">{aluno.loginBB}</span>
-                        <span className="block text-[10px]">DP: {aluno.matDP}</span>
-                      </td>
-                      <td className="p-2.5 font-bold text-slate-900 dark:text-white">
-                        {aluno.nome}
-                      </td>
-                      <td className="p-2.5 text-slate-500">
-                        <span>{aluno.supervisor}</span>
-                        <span className="block text-[10px] text-slate-400">{aluno.celula}</span>
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={aluno.frequenciaPercent}
-                          onChange={(e) => handleUpdateStudent(aluno.id, 'frequenciaPercent', parseFloat(e.target.value) || 0)}
-                          className="w-16 px-2 py-1 text-center font-bold border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.5}
-                          value={aluno.notaFinal}
-                          onChange={(e) => handleUpdateStudent(aluno.id, 'notaFinal', parseFloat(e.target.value) || 0)}
-                          className="w-20 px-2 py-1 text-center font-bold border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          aluno.statusAprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                          aluno.statusAprovacao === 'Reprovado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
-                          'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                        }`}>
-                          {aluno.statusAprovacao}
-                        </span>
-                      </td>
-                      <td className="p-2.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
-                          className="text-rose-500 hover:text-rose-700 p-1"
-                          title="Remover operador"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {editingAlunos.map((aluno) => {
+                    let displayLogin = aluno.loginBB || '';
+                    let displayMat = aluno.matDP || '';
+                    if (displayMat.toUpperCase().startsWith('C') && !displayLogin.toUpperCase().startsWith('C')) {
+                      const tmp = displayLogin;
+                      displayLogin = displayMat;
+                      displayMat = tmp;
+                    }
+
+                    return (
+                      <tr key={aluno.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="p-2 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
+                          {displayMat || 'N/A'}
+                        </td>
+                        <td className="p-2 font-mono font-bold text-indigo-700 dark:text-indigo-400 border-r border-slate-100 dark:border-slate-800">
+                          {displayLogin || 'N/A'}
+                        </td>
+                        <td className="p-2 font-bold text-slate-900 dark:text-white border-r border-slate-100 dark:border-slate-800">
+                          {aluno.nome}
+                        </td>
+                        <td className="p-2 text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {aluno.celula || 'GERAL'}
+                        </td>
+                        <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={aluno.frequenciaPercent}
+                            onChange={(e) => handleUpdateStudent(aluno.id, 'frequenciaPercent', parseFloat(e.target.value) || 0)}
+                            className="w-16 px-1.5 py-0.5 text-center font-bold border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
+                          />
+                        </td>
+                        <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            value={aluno.notaFinal}
+                            onChange={(e) => handleUpdateStudent(aluno.id, 'notaFinal', parseFloat(e.target.value) || 0)}
+                            className="w-16 px-1.5 py-0.5 text-center font-bold border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
+                          />
+                        </td>
+                        <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            aluno.statusAprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                            aluno.statusAprovacao === 'Reprovado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                            'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          }`}>
+                            {aluno.statusAprovacao}
+                          </span>
+                        </td>
+                        <td className="p-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
+                            className="text-rose-500 hover:text-rose-700 p-1"
+                            title="Remover operador"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                   {editingAlunos.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-6 text-center text-slate-400">
+                      <td colSpan={8} className="p-6 text-center text-slate-400">
                         Nenhum operador adicionado ainda nesta turma. Use a caixa acima para adicionar por login.
                       </td>
                     </tr>

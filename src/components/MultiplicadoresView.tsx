@@ -25,13 +25,11 @@ export const MultiplicadoresView: React.FC = () => {
 
   // Form State
   const [nome, setNome] = useState('');
-  const [email, setEmail] = useState('');
   const [foto, setFoto] = useState('');
   const [horarioInicio, setHorarioInicio] = useState('08:00');
   const [horarioFim, setHorarioFim] = useState('17:00');
   const [especialidadesInput, setEspecialidadesInput] = useState('');
-  const [status, setStatus] = useState<StatusMultiplicador>('Disponível');
-  const [telefone, setTelefone] = useState('');
+  const [status, setStatus] = useState<StatusMultiplicador>('Ativo');
 
   const filtered = multiplicadores.filter(m => {
     const q = searchQuery.toLowerCase();
@@ -44,25 +42,32 @@ export const MultiplicadoresView: React.FC = () => {
     if (m) {
       setEditingMult(m);
       setNome(m.nome);
-      setEmail(m.email);
       setFoto(m.foto || '');
       setHorarioInicio(m.horarioInicio);
       setHorarioFim(m.horarioFim);
       setEspecialidadesInput(m.especialidades.join(', '));
-      setStatus(m.status);
-      setTelefone(m.telefone || '');
+      setStatus(m.status === 'Disponível' ? 'Ativo' : m.status);
     } else {
       setEditingMult(null);
       setNome('');
-      setEmail('');
       setFoto('');
       setHorarioInicio('08:00');
       setHorarioFim('17:00');
       setEspecialidadesInput('');
-      setStatus('Disponível');
-      setTelefone('');
+      setStatus('Ativo');
     }
     setIsModalOpen(true);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) setFoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -72,25 +77,22 @@ export const MultiplicadoresView: React.FC = () => {
     if (editingMult) {
       updateMultiplicador(editingMult.id, {
         nome,
-        email,
         foto,
         horarioInicio,
         horarioFim,
         especialidades,
-        status,
-        telefone
+        status
       });
     } else {
       addMultiplicador({
         nome,
-        email,
+        email: `${nome.toLowerCase().replace(/\s+/g, '.')}@empresa.com`,
         foto: foto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         horarioInicio,
         horarioFim,
         especialidades,
         diasFolga: ['Sábado', 'Domingo'],
-        status,
-        telefone
+        status
       });
     }
 
@@ -99,11 +101,17 @@ export const MultiplicadoresView: React.FC = () => {
 
   const getStatusBadge = (st: StatusMultiplicador) => {
     switch (st) {
-      case 'Disponível': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold';
-      case 'Em Treinamento': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 font-bold';
-      case 'Férias': return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
-      case 'Folga': return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-      case 'Home Office': return 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300';
+      case 'Ativo':
+      case 'Disponível':
+        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold';
+      case 'Férias':
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold';
+      case 'Ausente':
+        return 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-bold';
+      case 'Folga':
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-bold';
+      default:
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-bold';
     }
   };
 
@@ -131,11 +139,10 @@ export const MultiplicadoresView: React.FC = () => {
             className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-800 dark:text-slate-200"
           >
             <option value="todos">Todos os Status ({multiplicadores.length})</option>
-            <option value="Disponível">Disponíveis</option>
-            <option value="Em Treinamento">Em Treinamento</option>
+            <option value="Ativo">Ativo</option>
             <option value="Férias">Férias</option>
+            <option value="Ausente">Ausente</option>
             <option value="Folga">Folga</option>
-            <option value="Home Office">Home Office</option>
           </select>
 
           <button
@@ -149,52 +156,49 @@ export const MultiplicadoresView: React.FC = () => {
 
       </div>
 
-      {/* Grid de Cards de Multiplicadores */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* Grid de Cards de Multiplicadores (4 blocos por linha) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {filtered.map(m => (
           <div 
             key={m.id}
-            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col justify-between"
+            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2.5 shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-700 transition-all flex flex-col justify-between"
           >
-            <div className="space-y-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
+            <div className="space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center space-x-2.5 min-w-0">
                   <img
                     src={m.foto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                     alt={m.nome}
-                    className="w-10 h-10 rounded-full object-cover ring-2 ring-indigo-500/20 shrink-0"
+                    className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-500/20 shrink-0"
                   />
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-white truncate">
                       {m.nome}
                     </h3>
-                    <p className="text-[10px] text-slate-400">
-                      {m.email}
-                    </p>
                   </div>
                 </div>
 
-                <span className={`px-2 py-0.5 rounded text-[10px] ${getStatusBadge(m.status)}`}>
-                  {m.status}
+                <span className={`px-2 py-0.5 rounded text-[10px] shrink-0 ${getStatusBadge(m.status)}`}>
+                  {m.status === 'Disponível' ? 'Ativo' : m.status}
                 </span>
               </div>
 
               <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
                 <div className="flex items-center space-x-2 text-[11px]">
-                  <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                  <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                   <span>Jornada: <strong>{m.horarioInicio} às {m.horarioFim}</strong></span>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center space-x-1.5 text-slate-400 font-bold text-[10px] uppercase">
-                    <Award className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Segmentos / Células de Atuação:</span>
+                    <Award className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Segmentos / Células:</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {m.especialidades.map((esp, i) => (
                       <span 
                         key={i} 
-                        className="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-200 dark:border-slate-700"
+                        className="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded text-[10px] font-medium border border-slate-200 dark:border-slate-700"
                       >
                         {esp}
                       </span>
@@ -206,20 +210,20 @@ export const MultiplicadoresView: React.FC = () => {
 
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
               <span className="text-slate-400 text-[10px]">
-                Folgas: {m.diasFolga.join(', ')}
+                Folga: Sáb / Dom
               </span>
 
               <div className="space-x-1">
                 <button
                   onClick={() => handleOpenModal(m)}
-                  className="p-1.5 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg transition-colors"
+                  className="p-1 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 rounded transition-colors"
                   title="Editar dados"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(m.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+                  className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
                   title="Excluir multiplicador"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -254,27 +258,32 @@ export const MultiplicadoresView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">E-mail Corporativo:</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Telefone / Ramal:</label>
-                  <input
-                    type="text"
-                    value={telefone}
-                    onChange={(e) => setTelefone(e.target.value)}
-                    placeholder="(11) 98765-4321"
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white focus:outline-hidden"
-                  />
+              {/* Upload Foto de Perfil */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Foto de Perfil:</label>
+                <div className="flex items-center space-x-3">
+                  {foto ? (
+                    <img src={foto} alt="Preview" className="w-10 h-10 rounded-full object-cover border border-slate-300 shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center text-slate-400 shrink-0 font-bold text-[10px]">
+                      Foto
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileChange}
+                      className="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Ou cole a URL da imagem..."
+                      value={foto}
+                      onChange={(e) => setFoto(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-slate-900 dark:text-white focus:outline-hidden text-[11px]"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -304,7 +313,7 @@ export const MultiplicadoresView: React.FC = () => {
 
               <div>
                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
-                  Segmentos / Células de Atuação (separadas por vírgula ou +):
+                  Segmentos / Células de Atuação (separadas por vírgula):
                 </label>
                 <input
                   type="text"
@@ -319,15 +328,14 @@ export const MultiplicadoresView: React.FC = () => {
               <div>
                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Status Atual:</label>
                 <select
-                  value={status}
+                  value={status === 'Disponível' ? 'Ativo' : status}
                   onChange={(e) => setStatus(e.target.value as StatusMultiplicador)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white focus:outline-hidden"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white focus:outline-hidden"
                 >
-                  <option value="Disponível">Disponível</option>
-                  <option value="Em Treinamento">Em Treinamento</option>
+                  <option value="Ativo">Ativo</option>
                   <option value="Férias">Férias</option>
+                  <option value="Ausente">Ausente</option>
                   <option value="Folga">Folga</option>
-                  <option value="Home Office">Home Office</option>
                 </select>
               </div>
             </div>

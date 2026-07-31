@@ -207,6 +207,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
                 <option value="Sinergia">Sinergia</option>
                 <option value="Migração">Migração</option>
                 <option value="Novatos">Novatos</option>
+                <option value="Retorno LMG">Retorno LMG</option>
               </select>
             </div>
 

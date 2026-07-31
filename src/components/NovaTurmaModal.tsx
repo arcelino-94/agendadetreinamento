@@ -245,6 +245,8 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
                 <option value="Sinergia">Sinergia</option>
                 <option value="Alinhamento">Alinhamento</option>
                 <option value="Novatos">Novatos</option>
+                <option value="Migração">Migração</option>
+                <option value="Retorno LMG">Retorno LMG</option>
               </select>
             </div>
           </div>
@@ -260,11 +262,13 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
                 onChange={(e) => setMultiplicadorId(e.target.value)}
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
               >
-                {multiplicadores.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome} ({m.status})
-                  </option>
-                ))}
+                {multiplicadores
+                  .filter(m => m.status === 'Ativo' || m.status === 'Disponível')
+                  .map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.nome}
+                    </option>
+                  ))}
               </select>
             </div>
 

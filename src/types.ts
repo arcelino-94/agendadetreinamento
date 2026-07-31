@@ -1,10 +1,10 @@
-export type TipoDemanda = 'Reciclagem' | 'Sinergia' | 'Alinhamento' | 'Novatos' | 'Migração';
+export type TipoDemanda = 'Reciclagem' | 'Sinergia' | 'Alinhamento' | 'Novatos' | 'Migração' | 'Retorno LMG';
 
 export type Prioridade = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
 
 export type StatusDemanda = 'Novo' | 'Em Planejamento' | 'Agendado' | 'Em Execução' | 'Finalizado' | 'Cancelado';
 
-export type StatusMultiplicador = 'Disponível' | 'Em Treinamento' | 'Ausente' | 'Férias' | 'Folga' | 'Home Office';
+export type StatusMultiplicador = 'Ativo' | 'Férias' | 'Ausente' | 'Folga' | 'Disponível' | 'Em Treinamento' | 'Home Office';
 
 export type StatusSala = 'Livre' | 'Ocupada' | 'Manutenção';
 
@@ -166,7 +166,7 @@ export interface ItemFrequenciaNota {
   id: string;
   demandaId?: string;
   treinamento: string;
-  tipo: 'Sinergia' | 'Migração' | 'Novatos';
+  tipo: 'Sinergia' | 'Migração' | 'Novatos' | 'Retorno LMG';
   celulas: string[];
   dataInicio: string;
   dataFim: string;
