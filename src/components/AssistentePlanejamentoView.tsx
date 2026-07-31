@@ -25,14 +25,16 @@ export const AssistentePlanejamentoView: React.FC<AssistentePlanejamentoViewProp
   const [selectedTab, setSelectedTab] = useState<'agrupamentos' | 'encaixes' | 'alertas'>('agrupamentos');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+
   // Análises do motor
-  const agrupamentos = detectSmartGroupings(demandas, multiplicadores, salas);
-  const encaixes = generateSmartSlots(demandas, multiplicadores, salas, turmas);
+  const agrupamentos = detectSmartGroupings(demandas, multiplicadoresAtivos, salas);
+  const encaixes = generateSmartSlots(demandas, multiplicadoresAtivos, salas, turmas);
   const alertas = getDeadlineAlerts(demandas);
 
   // Executar criação de turma em 1 clique para agrupamento
   const handleAprovarAgrupamento = (group: SugestaoAgrupamento) => {
-    const defaultMult = group.multiplicadoresAptos[0] || multiplicadores[0];
+    const defaultMult = group.multiplicadoresAptos[0] || multiplicadoresAtivos[0];
     const defaultSala = group.salasAptas[0] || salas[0];
 
     if (onOpenNovaTurmaWithData) {

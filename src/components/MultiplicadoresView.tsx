@@ -13,7 +13,7 @@ import { Multiplicador, StatusMultiplicador } from '../types';
 import { PasswordConfirmModal } from './PasswordConfirmModal';
 
 export const MultiplicadoresView: React.FC = () => {
-  const { multiplicadores, addMultiplicador, updateMultiplicador, deleteMultiplicador } = useApp();
+  const { multiplicadores, celulas, addMultiplicador, updateMultiplicador, deleteMultiplicador } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
@@ -28,7 +28,7 @@ export const MultiplicadoresView: React.FC = () => {
   const [foto, setFoto] = useState('');
   const [horarioInicio, setHorarioInicio] = useState('08:00');
   const [horarioFim, setHorarioFim] = useState('17:00');
-  const [especialidadesInput, setEspecialidadesInput] = useState('');
+  const [selectedEspecialidades, setSelectedEspecialidades] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusMultiplicador>('Ativo');
 
   const filtered = multiplicadores.filter(m => {
@@ -38,6 +38,22 @@ export const MultiplicadoresView: React.FC = () => {
     return matchQuery && matchStatus;
   });
 
+  const toggleEspecialidade = (nomeCelula: string) => {
+    if (selectedEspecialidades.includes(nomeCelula)) {
+      setSelectedEspecialidades(selectedEspecialidades.filter(s => s !== nomeCelula));
+    } else {
+      setSelectedEspecialidades([...selectedEspecialidades, nomeCelula]);
+    }
+  };
+
+  const selectAllCelulas = () => {
+    setSelectedEspecialidades(celulas.map(c => c.nome));
+  };
+
+  const clearAllCelulas = () => {
+    setSelectedEspecialidades([]);
+  };
+
   const handleOpenModal = (m?: Multiplicador) => {
     if (m) {
       setEditingMult(m);
@@ -45,7 +61,7 @@ export const MultiplicadoresView: React.FC = () => {
       setFoto(m.foto || '');
       setHorarioInicio(m.horarioInicio);
       setHorarioFim(m.horarioFim);
-      setEspecialidadesInput(m.especialidades.join(', '));
+      setSelectedEspecialidades(m.especialidades || []);
       setStatus(m.status === 'Disponível' ? 'Ativo' : m.status);
     } else {
       setEditingMult(null);
@@ -53,7 +69,7 @@ export const MultiplicadoresView: React.FC = () => {
       setFoto('');
       setHorarioInicio('08:00');
       setHorarioFim('17:00');
-      setEspecialidadesInput('');
+      setSelectedEspecialidades([]);
       setStatus('Ativo');
     }
     setIsModalOpen(true);
@@ -72,7 +88,7 @@ export const MultiplicadoresView: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const especialidades = especialidadesInput.split(',').map(s => s.trim()).filter(Boolean);
+    const especialidades = selectedEspecialidades;
 
     if (editingMult) {
       updateMultiplicador(editingMult.id, {
@@ -312,17 +328,59 @@ export const MultiplicadoresView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
-                  Segmentos / Células de Atuação (separadas por vírgula):
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: SAC, CARTÃO, MULTIMEIOS, ROI"
-                  value={especialidadesInput}
-                  onChange={(e) => setEspecialidadesInput(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white focus:outline-hidden"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs">
+                    Segmentos / Células de Atuação:
+                  </label>
+                  <div className="flex items-center space-x-1.5 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={selectAllCelulas}
+                      className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded hover:bg-indigo-200 text-[10px]"
+                    >
+                      + Selecionar Todas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearAllCelulas}
+                      className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium rounded hover:bg-slate-300 text-[10px]"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 bg-slate-50 dark:bg-slate-800/50 max-h-28 overflow-y-auto">
+                  {celulas.length === 0 ? (
+                    <p className="text-[10px] text-slate-400 italic p-1">Nenhuma célula cadastrada em Células de Atendimento.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {celulas.map(c => {
+                        const isSelected = selectedEspecialidades.includes(c.nome);
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => toggleEspecialidade(c.nome)}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all flex items-center space-x-0.5 leading-tight ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-indigo-400'
+                            }`}
+                          >
+                            <span className="text-[9px]">{isSelected ? '✓' : '+'}</span>
+                            <span>{c.nome}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                {selectedEspecialidades.length > 0 && (
+                  <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                    {selectedEspecialidades.length} célula(s) vinculada(s): <strong className="text-indigo-600 dark:text-indigo-400">{selectedEspecialidades.join(', ')}</strong>
+                  </p>
+                )}
               </div>
 
               <div>

@@ -91,7 +91,7 @@ export function AppContent() {
         onOpenFirebaseModal={() => setIsFirebaseModalOpen(true)}
       />
 
-      <div className="flex-1 flex max-w-[1720px] w-full mx-auto px-3 py-3 gap-3">
+      <div className="flex-1 flex flex-col md:flex-row max-w-[1720px] w-full mx-auto px-2 sm:px-3 py-2 sm:py-3 gap-2 sm:gap-3">
         
         {/* Sidebar de Navegação */}
         <Sidebar />

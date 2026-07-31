@@ -81,13 +81,16 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
     }
   };
 
+  // Apenas multiplicadores com status "Ativo" aparecem na agenda
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+
   // Filtragem de multiplicadores por especialidade
   const filteredMultiplicadores = filterSpecialty === 'todos' 
-    ? multiplicadores 
-    : multiplicadores.filter(m => m.especialidades.includes(filterSpecialty));
+    ? multiplicadoresAtivos 
+    : multiplicadoresAtivos.filter(m => m.especialidades.includes(filterSpecialty));
 
-  // Todas as especialidades cadastradas
-  const todasEspecialidades = Array.from(new Set(multiplicadores.flatMap(m => m.especialidades)));
+  // Todas as especialidades cadastradas dos multiplicadores ativos
+  const todasEspecialidades = Array.from(new Set(multiplicadoresAtivos.flatMap(m => m.especialidades)));
 
   return (
     <div className="space-y-4">
@@ -108,7 +111,7 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Grade por Multiplicador ({multiplicadores.length})</span>
+              <span>Grade por Multiplicador ({multiplicadoresAtivos.length})</span>
             </button>
 
             <button

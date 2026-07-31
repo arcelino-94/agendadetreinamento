@@ -83,7 +83,8 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
     } else {
       setEditingTurmaId(null);
       setData(selectedDate);
-      if (multiplicadores.length > 0) setMultiplicadorId(multiplicadores[0].id);
+      const activeMults = multiplicadores.filter(m => m.status === 'Ativo');
+      if (activeMults.length > 0) setMultiplicadorId(activeMults[0].id);
       if (salas.length > 0) setSalaId(salas[0].id);
     }
   }, [initialPreset, selectedDate, multiplicadores, salas]);
@@ -263,7 +264,7 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
               >
                 {multiplicadores
-                  .filter(m => m.status === 'Ativo' || m.status === 'Disponível')
+                  .filter(m => m.status === 'Ativo' || m.id === multiplicadorId)
                   .map(m => (
                     <option key={m.id} value={m.id}>
                       {m.nome}

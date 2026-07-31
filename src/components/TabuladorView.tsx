@@ -572,7 +572,8 @@ export const TabuladorView: React.FC = () => {
     setBulkIncludeItem(item);
     setBulkLoginsText('');
     setBulkData(item.data || new Date().toISOString().split('T')[0]);
-    setBulkMultiplicador(multiplicadores[0]?.nome || 'MARIA CLARA');
+    const activeMults = multiplicadores.filter(m => m.status === 'Ativo');
+    setBulkMultiplicador(activeMults[0]?.nome || 'Sem Multiplicador');
     setBulkHora('09:00');
     setBulkLocal('Ilha Operacional');
     setBulkStatus('Pendente');
@@ -1368,7 +1369,7 @@ export const TabuladorView: React.FC = () => {
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-bold text-slate-900 dark:text-white"
                   >
                     <option value="Sem Multiplicador">Sem Multiplicador</option>
-                    {multiplicadores.map(m => (
+                    {multiplicadores.filter(m => m.status === 'Ativo').map(m => (
                       <option key={m.id} value={m.nome}>{m.nome}</option>
                     ))}
                     <option value="T&D / SUPORTE">T&D / SUPORTE GENERALISTA</option>

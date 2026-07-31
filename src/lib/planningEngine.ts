@@ -59,9 +59,11 @@ export function detectSmartGroupings(
     const totalOperadores = listaDemandas.reduce((acc, curr) => acc + curr.qtdOperadores, 0);
     const celulasUnicas = Array.from(new Set(listaDemandas.map(d => d.celulaNome)));
 
+    // APENAS multiplicadores com status "Ativo" são considerados
+    const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+
     // Encontrar multiplicadores aptos que possuem o tema nas especialidades
-    const multiplicadoresAptos = multiplicadores.filter(m => {
-      if (m.status === 'Férias' || m.status === 'Folga') return false;
+    const multiplicadoresAptos = multiplicadoresAtivos.filter(m => {
       return m.especialidades.some(esp => 
         normalizeText(esp).includes(normalizeText(temaOriginal)) ||
         normalizeText(temaOriginal).includes(normalizeText(esp))
@@ -84,7 +86,7 @@ export function detectSmartGroupings(
       demandas: listaDemandas,
       totalOperadores,
       celulas: celulasUnicas,
-      multiplicadoresAptos: multiplicadoresAptos.length > 0 ? multiplicadoresAptos : multiplicadores,
+      multiplicadoresAptos: multiplicadoresAptos.length > 0 ? multiplicadoresAptos : multiplicadoresAtivos,
       salasAptas,
       motivo
     });
@@ -107,12 +109,13 @@ export function generateSmartSlots(
 
   const targetDate = new Date().toISOString().split('T')[0];
 
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
+
   pendentes.forEach(demanda => {
-    // 1. Encontrar multiplicador adequado
-    const multiplicadorApto = multiplicadores.find(m => {
-      if (m.status !== 'Disponível' && m.status !== 'Home Office') return false;
+    // 1. Encontrar multiplicador adequado (apenas Ativos)
+    const multiplicadorApto = multiplicadoresAtivos.find(m => {
       return m.especialidades.some(esp => normalizeText(esp).includes(normalizeText(demanda.tema)) || normalizeText(demanda.tema).includes(normalizeText(esp)));
-    }) || multiplicadores.find(m => m.status === 'Disponível');
+    }) || multiplicadoresAtivos[0];
 
     if (!multiplicadorApto) return;
 

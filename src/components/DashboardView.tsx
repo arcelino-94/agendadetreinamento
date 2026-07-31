@@ -26,13 +26,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenNovaDemanda,
   // Métricas Principais
   const pendentes = demandas.filter(d => d.status === 'Novo' || d.status === 'Em Planejamento');
   const turmasHoje = turmas.filter(t => t.data === selectedDate && t.status !== 'Cancelado');
-  const multiplicadoresDisponiveis = multiplicadores.filter(m => m.status === 'Disponível' || m.status === 'Home Office');
+  const multiplicadoresAtivos = multiplicadores.filter(m => m.status === 'Ativo');
   const salasLivres = salas.filter(s => s.status === 'Livre');
   const alertasPrazo = getDeadlineAlerts(demandas);
 
   // Recomendações
-  const agrupamentos = detectSmartGroupings(demandas, multiplicadores, salas);
-  const encaixes = generateSmartSlots(demandas, multiplicadores, salas, turmas);
+  const agrupamentos = detectSmartGroupings(demandas, multiplicadoresAtivos, salas);
+  const encaixes = generateSmartSlots(demandas, multiplicadoresAtivos, salas, turmas);
 
   // Tipos de demanda contagem
   const demandasPorTipo = {
@@ -90,21 +90,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenNovaDemanda,
           </div>
         </div>
 
-        {/* Card 3: Multiplicadores Livres */}
+        {/* Card 3: Multiplicadores Ativos */}
         <div 
           onClick={() => setActiveTab('multiplicadores')}
           className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-semibold">
-            <span>Instrutores Livres</span>
+            <span>Instrutores Ativos</span>
             <Users className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
           </div>
           <div className="mt-1 flex items-baseline space-x-1.5">
-            <span className="text-xl font-bold text-slate-900 dark:text-white font-mono">{multiplicadoresDisponiveis.length}</span>
-            <span className="text-[10px] text-slate-500">de {multiplicadores.length}</span>
+            <span className="text-xl font-bold text-slate-900 dark:text-white font-mono">{multiplicadoresAtivos.length}</span>
+            <span className="text-[10px] text-slate-500">instrutores</span>
           </div>
           <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
-            <span>{multiplicadores.filter(m => m.status === 'Em Treinamento').length} em sala</span>
+            <span>Cadastrados no sistema</span>
             <span className="text-sky-600 dark:text-sky-400 font-bold flex items-center">
               Gestão <ArrowUpRight className="w-2.5 h-2.5 ml-0.5" />
             </span>
