@@ -43,7 +43,7 @@ export interface Demanda {
   tipo: TipoDemanda;
   origem: string; // e.g. "E-mail Operacional", "Planejamento", "Supervisor"
   supervisor: string; // Solicitante / Área
-  gerente?: string;
+  gerente?: string | null;
   dataSolicitacao: string; // YYYY-MM-DD
   prazoLimite: string; // YYYY-MM-DD
   prioridade: Prioridade;
@@ -51,19 +51,19 @@ export interface Demanda {
   celulaId: string;
   celulaIds?: string[]; // IDs de múltiplas células quando selecionadas
   celulaNome: string;
-  duracaoValor?: number;
-  duracaoUnidade?: 'minutos' | 'horas' | 'dias';
+  duracaoValor?: number | null;
+  duracaoUnidade?: 'minutos' | 'horas' | 'dias' | null;
   qtdOperadores: number;
   listaOperadores: string[]; // Lista de nomes ou matrículas (Logins C...)
   status: StatusDemanda;
-  observacoes?: string;
+  observacoes?: string | null;
   anexos?: string[];
-  turmaAgendadaId?: string;
+  turmaAgendadaId?: string | null;
   dataCriacao: string;
-  dataInicio?: string;
-  dataFim?: string;
-  multiplicadorId?: string;
-  multiplicadorNome?: string;
+  dataInicio?: string | null;
+  dataFim?: string | null;
+  multiplicadorId?: string | null;
+  multiplicadorNome?: string | null;
 }
 
 export interface Turma {
@@ -130,7 +130,7 @@ export interface OperadorAlinhamento {
   multiplicador?: string;
   local?: string;
   statusPresenca?: 'Presente' | 'Dispensado' | 'Pendente';
-  tipoAusencia?: string; // e.g., 'Atestado', 'Férias', 'ABS', 'TO', 'INSS', 'LMG'
+  tipoAusencia?: string | null; // e.g., 'Atestado', 'Férias', 'ABS', 'TO', 'INSS', 'LMG'
 }
 
 export interface AlinhamentoTabulador {

@@ -23,70 +23,25 @@ import {
   AlertCircle,
   Save,
   UserPlus,
-  PlusCircle
+  PlusCircle,
+  CloudOff
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ItemFrequenciaNota, AlunoFrequenciaNota, PresencaDiariaItem } from '../types';
 import { PasswordConfirmModal } from './PasswordConfirmModal';
 
 export const FrequenciasNotasView: React.FC = () => {
-  const { demandas, celulas, multiplicadores, operadores } = useApp();
-
-  // Local state for Frequencias e Notas items
-  const [items, setItems] = useState<ItemFrequenciaNota[]>(() => {
-    // Generate initial items from mock demandas of type Sinergia / Novatos / Migração or default mocks
-    return [
-      {
-        id: 'FN-101',
-        treinamento: 'FORMAÇÃO DE NOVATOS - SAC CARTÃO 2026.1',
-        tipo: 'Novatos',
-        celulas: ['SAC CARTÃO'],
-        dataInicio: '2026-07-01',
-        dataFim: '2026-07-25',
-        multiplicador: 'MARIA CLARA DOS SANTOS',
-        cargaHoraria: '120h',
-        status: 'Concluído',
-        criadoEm: new Date().toISOString(),
-        alunos: [
-          { id: 'aln-1', matDP: '40782', loginBB: 'C1312444', nome: 'MARIA TAYNARA LIMA BRAZ DE MELO', supervisor: 'Thamyres Amorim', gerente: 'Rosana Gomes', celula: 'SAC CARTÃO', frequenciaPercent: 96, notaFinal: 8.8, statusAprovacao: 'Aprovado' },
-          { id: 'aln-2', matDP: '40844', loginBB: 'C1334964', nome: 'SABRINA MIRELLE CAETANO DE OLIVEIRA', supervisor: 'Jaqueline Silva', gerente: 'Girleide Lira', celula: 'SAC CARTÃO', frequenciaPercent: 100, notaFinal: 9.2, statusAprovacao: 'Aprovado' },
-          { id: 'aln-3', matDP: '40546', loginBB: 'C1334914', nome: 'ACIDALIA DE CARVALHO FRANCA', supervisor: 'Gutemberg Costa', gerente: 'Rosana Gomes', celula: 'SAC CARTÃO', frequenciaPercent: 80, notaFinal: 6.2, statusAprovacao: 'Reprovado' }
-        ]
-      },
-      {
-        id: 'FN-102',
-        treinamento: 'SINERGIA & MIGRAÇÃO HD N1 -> OUVIDORIA',
-        tipo: 'Sinergia',
-        celulas: ['HD N1', 'OUVIDORIA'],
-        dataInicio: '2026-07-10',
-        dataFim: '2026-07-28',
-        multiplicador: 'JOSE LEANDRO DE ALBUQUERQUE BRAGA',
-        cargaHoraria: '40h',
-        status: 'Em Andamento',
-        criadoEm: new Date().toISOString(),
-        alunos: [
-          { id: 'aln-4', matDP: '28924', loginBB: 'C1286562', nome: 'ADRIANA DE LIMA BARBOSA', supervisor: 'Avani Martir', gerente: 'Girleide Lira', celula: 'OUVIDORIA', frequenciaPercent: 92, notaFinal: 8.5, statusAprovacao: 'Aprovado' },
-          { id: 'aln-5', matDP: '40828', loginBB: 'C1334988', nome: 'RAYANE CRISTINE ALVES DOS SANTOS', supervisor: 'Avani Martir', gerente: 'Girleide Lira', celula: 'OUVIDORIA', frequenciaPercent: 88, notaFinal: 7.8, statusAprovacao: 'Em Andamento' }
-        ]
-      },
-      {
-        id: 'FN-103',
-        treinamento: 'MIGRAÇÃO DE CÉLULAS - PRODUTO CONSIGNADO',
-        tipo: 'Migração',
-        celulas: ['MULTIMEIOS', 'ATA'],
-        dataInicio: '2026-07-15',
-        dataFim: '2026-07-30',
-        multiplicador: 'CARLOS EDUARDO SILVA',
-        cargaHoraria: '60h',
-        status: 'Em Andamento',
-        criadoEm: new Date().toISOString(),
-        alunos: [
-          { id: 'aln-6', matDP: '36283', loginBB: 'C1274287', nome: 'MICHELE CORREIA CASSIMIRO', supervisor: 'Christiane Ferraz', gerente: 'Rosana Gomes', celula: 'MULTIMEIOS', frequenciaPercent: 95, notaFinal: 9.0, statusAprovacao: 'Aprovado' },
-          { id: 'aln-7', matDP: '36016', loginBB: 'C1296728', nome: 'ANDREA ALVES DA SILVA', supervisor: 'Gleiberson Freitas', gerente: 'Rosana Gomes', celula: 'MULTIMEIOS', frequenciaPercent: 90, notaFinal: 8.2, statusAprovacao: 'Aprovado' }
-        ]
-      }
-    ];
-  });
+  const { 
+    frequenciasNotas: items = [], 
+    updateFrequenciaNota, 
+    deleteFrequenciaNota, 
+    addFrequenciaNota,
+    demandas, 
+    celulas, 
+    multiplicadores, 
+    operadores,
+    isItemPendingSync
+  } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTipo, setSelectedTipo] = useState<string>('todos');
@@ -354,15 +309,9 @@ export const FrequenciasNotasView: React.FC = () => {
 
   const handleSaveCourseChanges = () => {
     if (!activeCourse) return;
-    setItems(prev => prev.map(c => {
-      if (c.id === activeCourse.id) {
-        return {
-          ...c,
-          alunos: editingAlunos
-        };
-      }
-      return c;
-    }));
+    updateFrequenciaNota(activeCourse.id, {
+      alunos: editingAlunos
+    });
     setActiveCourse(null);
   };
 
@@ -557,6 +506,12 @@ export const FrequenciasNotasView: React.FC = () => {
                       {course.tipo}
                     </span>
                     <span className="text-xs font-mono font-bold text-slate-400">{course.id}</span>
+                    {isItemPendingSync(course.id) && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center space-x-1 shrink-0" title="Salvo localmente na máquina, pendente de sincronizar no Firestore">
+                        <CloudOff className="w-2.5 h-2.5" />
+                        <span>Pendente de sincronizar</span>
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                     {course.treinamento}
@@ -1133,7 +1088,7 @@ export const FrequenciasNotasView: React.FC = () => {
         onClose={() => setDeletingCourseId(null)}
         onConfirm={() => {
           if (deletingCourseId) {
-            setItems(prev => prev.filter(c => c.id !== deletingCourseId));
+            deleteFrequenciaNota(deletingCourseId);
             setDeletingCourseId(null);
           }
         }}

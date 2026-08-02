@@ -1,4 +1,4 @@
-import { Multiplicador, CelulaAtendimento, SalaTreinamento, Demanda, Turma, OperadorQuadro, AlinhamentoTabulador } from '../types';
+import { Multiplicador, CelulaAtendimento, SalaTreinamento, Demanda, Turma, OperadorQuadro, AlinhamentoTabulador, ItemFrequenciaNota } from '../types';
 
 export const INITIAL_CELULAS: CelulaAtendimento[] = [
   { id: 'cel-1', nome: 'ROI', gestor: 'Jefferson Luiz', operadoresAtivos: 35 },
@@ -451,4 +451,56 @@ export const INITIAL_OPERADORES: OperadorQuadro[] = [
   { id: 'op-48', matDP: '41219', loginBB: 'C1335818', nome: 'VERONICA SEVERINA DA SILVA', supervisor: 'Jeane Silva', gerente: 'Jeyse Araujo', horarioEntrada: '06:20:00', segmento: 'CARTAO PORTADOR' },
   { id: 'op-49', matDP: '40755', loginBB: 'C1335669', nome: 'LUCIANA MARIA PEREIRA DA SILVA', supervisor: 'Rafael Pereira', gerente: 'Jefferson Luiz', horarioEntrada: '06:10:00', segmento: 'ROI' },
   { id: 'op-50', matDP: '40781', loginBB: 'C1335670', nome: 'MARIA LUZIANA FERNANDES DA SILVA', supervisor: 'Rafael Pereira', gerente: 'Jefferson Luiz', horarioEntrada: '06:20:00', segmento: 'ROI' }
+];
+
+export const INITIAL_FREQUENCIAS_NOTAS: ItemFrequenciaNota[] = [
+  {
+    id: 'FN-101',
+    treinamento: 'FORMAÇÃO DE NOVATOS - SAC CARTÃO 2026.1',
+    tipo: 'Novatos',
+    celulas: ['SAC CARTÃO'],
+    dataInicio: '2026-07-01',
+    dataFim: '2026-07-25',
+    multiplicador: 'MARIA CLARA DOS SANTOS',
+    cargaHoraria: '120h',
+    status: 'Concluído',
+    criadoEm: new Date().toISOString(),
+    alunos: [
+      { id: 'aln-1', matDP: '40782', loginBB: 'C1312444', nome: 'MARIA TAYNARA LIMA BRAZ DE MELO', supervisor: 'Thamyres Amorim', gerente: 'Rosana Gomes', celula: 'SAC CARTÃO', frequenciaPercent: 96, notaFinal: 8.8, statusAprovacao: 'Aprovado' },
+      { id: 'aln-2', matDP: '40844', loginBB: 'C1334964', nome: 'SABRINA MIRELLE CAETANO DE OLIVEIRA', supervisor: 'Jaqueline Silva', gerente: 'Girleide Lira', celula: 'SAC CARTÃO', frequenciaPercent: 100, notaFinal: 9.2, statusAprovacao: 'Aprovado' },
+      { id: 'aln-3', matDP: '40546', loginBB: 'C1334914', nome: 'ACIDALIA DE CARVALHO FRANCA', supervisor: 'Gutemberg Costa', gerente: 'Rosana Gomes', celula: 'SAC CARTÃO', frequenciaPercent: 80, notaFinal: 6.2, statusAprovacao: 'Reprovado' }
+    ]
+  },
+  {
+    id: 'FN-102',
+    treinamento: 'SINERGIA & MIGRAÇÃO HD N1 -> OUVIDORIA',
+    tipo: 'Sinergia',
+    celulas: ['HD N1', 'OUVIDORIA'],
+    dataInicio: '2026-07-10',
+    dataFim: '2026-07-28',
+    multiplicador: 'JOSE LEANDRO DE ALBUQUERQUE BRAGA',
+    cargaHoraria: '40h',
+    status: 'Em Andamento',
+    criadoEm: new Date().toISOString(),
+    alunos: [
+      { id: 'aln-4', matDP: '28924', loginBB: 'C1286562', nome: 'ADRIANA DE LIMA BARBOSA', supervisor: 'Avani Martir', gerente: 'Girleide Lira', celula: 'OUVIDORIA', frequenciaPercent: 92, notaFinal: 8.5, statusAprovacao: 'Aprovado' },
+      { id: 'aln-5', matDP: '40828', loginBB: 'C1334988', nome: 'RAYANE CRISTINE ALVES DOS SANTOS', supervisor: 'Avani Martir', gerente: 'Girleide Lira', celula: 'OUVIDORIA', frequenciaPercent: 88, notaFinal: 7.8, statusAprovacao: 'Em Andamento' }
+    ]
+  },
+  {
+    id: 'FN-103',
+    treinamento: 'MIGRAÇÃO DE CÉLULAS - PRODUTO CONSIGNADO',
+    tipo: 'Migração',
+    celulas: ['MULTIMEIOS', 'ATA'],
+    dataInicio: '2026-07-15',
+    dataFim: '2026-07-30',
+    multiplicador: 'CARLOS EDUARDO SILVA',
+    cargaHoraria: '60h',
+    status: 'Em Andamento',
+    criadoEm: new Date().toISOString(),
+    alunos: [
+      { id: 'aln-6', matDP: '36283', loginBB: 'C1274287', nome: 'MICHELE CORREIA CASSIMIRO', supervisor: 'Christiane Ferraz', gerente: 'Rosana Gomes', celula: 'MULTIMEIOS', frequenciaPercent: 95, notaFinal: 9.0, statusAprovacao: 'Aprovado' },
+      { id: 'aln-7', matDP: '36016', loginBB: 'C1296728', nome: 'ANDREA ALVES DA SILVA', supervisor: 'Gleiberson Freitas', gerente: 'Rosana Gomes', celula: 'MULTIMEIOS', frequenciaPercent: 90, notaFinal: 8.2, statusAprovacao: 'Aprovado' }
+    ]
+  }
 ];

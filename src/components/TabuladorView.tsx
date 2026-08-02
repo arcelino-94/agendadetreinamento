@@ -16,7 +16,8 @@ import {
   Filter,
   Printer,
   ChevronDown,
-  RotateCcw
+  RotateCcw,
+  CloudOff
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AlinhamentoTabulador, OperadorAlinhamento } from '../types';
@@ -370,11 +371,13 @@ export const TabuladorView: React.FC = () => {
     tabulador, 
     addAlinhamentoTabulador, 
     updateAlinhamentoTabulador,
+    atomicUpdateTabuladorOperadores,
     deleteAlinhamentoTabulador, 
     celulas,
     multiplicadores,
     operadores,
-    getOperadorByLogin
+    getOperadorByLogin,
+    isItemPendingSync
   } = useApp();
 
   // Selected Month and Year Picklists (default '07' / '2026')
@@ -744,6 +747,8 @@ export const TabuladorView: React.FC = () => {
 
     const existingOps = bulkIncludeItem.operadores || [];
     const newOps: OperadorAlinhamento[] = [...existingOps];
+    const newlyAddedItems: OperadorAlinhamento[] = [];
+    const updatedOpsPairs: { oldOp: OperadorAlinhamento; newOp: OperadorAlinhamento }[] = [];
     const alreadyTabulated: string[] = [];
 
     logins.forEach(login => {
@@ -767,15 +772,17 @@ export const TabuladorView: React.FC = () => {
           alreadyTabulated.push(existingOp.nome || existingOp.loginBB || login);
         } else {
           // Fill in attendance details for this existing pending operator while preserving Quadro metadata
-          newOps[index] = {
+          const updatedOp: OperadorAlinhamento = {
             ...existingOp,
             dataPresenca: bulkData,
             horario: bulkHora,
             multiplicador: bulkMultiplicador || 'Sem Multiplicador',
             local: bulkLocal,
             statusPresenca: bulkStatus,
-            tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
+            tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : null
           };
+          updatedOpsPairs.push({ oldOp: existingOp, newOp: updatedOp });
+          newOps[index] = updatedOp;
         }
       } else {
         // Operator NOT in tabulador yet -> Look up in Quadro
@@ -792,8 +799,9 @@ export const TabuladorView: React.FC = () => {
           multiplicador: bulkMultiplicador || 'Sem Multiplicador',
           local: bulkLocal,
           statusPresenca: bulkStatus,
-          tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : undefined
+          tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : null
         };
+        newlyAddedItems.push(newOpEntry);
         newOps.push(newOpEntry);
       }
     });
@@ -802,22 +810,11 @@ export const TabuladorView: React.FC = () => {
       alert(`Aviso:\nOs seguintes operadores já estão totalmente tabulados e NÃO foram sobrescritos:\n\n• ${alreadyTabulated.join('\n• ')}`);
     }
 
-    const newConvocados = newOps.length;
-    const newPresentes = newOps.filter(o => o.statusPresenca === 'Presente').length;
-    const newDispensado = newOps.filter(o => o.statusPresenca === 'Dispensado').length;
-    const newPendentes = Math.max(0, newConvocados - newPresentes - newDispensado);
-    const newPercentual = newConvocados > 0 ? Math.round((newPresentes / newConvocados) * 100) : 0;
-    const newHoras = calculateHorasTreinamento(newPresentes, bulkIncludeItem.cargaHoraria);
-
-    updateAlinhamentoTabulador(bulkIncludeItem.id, {
-      operadores: newOps,
-      convocados: newConvocados,
-      presentes: newPresentes,
-      dispensado: newDispensado,
-      pendentes: newPendentes,
-      percentual: newPercentual,
-      horasTreinamento: newHoras
-    });
+    atomicUpdateTabuladorOperadores(
+      bulkIncludeItem.id,
+      newlyAddedItems,
+      updatedOpsPairs
+    );
 
     setBulkIncludeItem(null);
   };
@@ -1141,6 +1138,12 @@ export const TabuladorView: React.FC = () => {
                         >
                           <span className="w-1.5 h-4 bg-indigo-600 group-hover:bg-amber-500 rounded-full shrink-0 transition-colors"></span>
                           <span className="uppercase group-hover:underline font-bold text-[10px] leading-tight break-words">{item.treinamento}</span>
+                          {isItemPendingSync(item.id) && (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center space-x-1 shrink-0" title="Salvo localmente na máquina, pendente de sincronizar no Firestore">
+                              <CloudOff className="w-2.5 h-2.5" />
+                              <span>Pendente</span>
+                            </span>
+                          )}
                         </button>
                       </td>
 

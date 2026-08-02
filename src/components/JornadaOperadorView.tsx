@@ -15,7 +15,8 @@ import {
   Building2, 
   FileSpreadsheet,
   Filter,
-  Zap
+  Zap,
+  CloudOff
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -30,7 +31,7 @@ interface OpInfo {
 }
 
 export const JornadaOperadorView: React.FC = () => {
-  const { operadores, tabulador, celulas, frequenciasNotas } = useApp();
+  const { operadores, tabulador, celulas, frequenciasNotas, isItemPendingSync } = useApp();
 
   // Search input state
   const [selectedLogin, setSelectedLogin] = useState<string>('');
@@ -80,6 +81,28 @@ export const JornadaOperadorView: React.FC = () => {
       });
     });
 
+    // 3. Add historical operators from Frequencias e Notas if not already in map
+    if (frequenciasNotas && Array.isArray(frequenciasNotas)) {
+      frequenciasNotas.forEach(freq => {
+        (freq.alunos || []).forEach(op => {
+          if (op.loginBB) {
+            const cleanLogin = op.loginBB.trim().toUpperCase();
+            if (!map.has(cleanLogin)) {
+              map.set(cleanLogin, {
+                loginBB: cleanLogin,
+                nome: op.nome || `OPERADOR ${cleanLogin}`,
+                matDP: op.matDP || 'N/A',
+                supervisor: op.supervisor || 'N/A',
+                gerente: op.gerente || 'N/A',
+                segmento: op.celula || (freq.celulas && freq.celulas[0]) || 'GERAL',
+                isAtivoNoQuadro: false
+              });
+            }
+          }
+        });
+      });
+    }
+
     return map;
   }, [operadores, tabulador]);
 
@@ -125,7 +148,7 @@ export const JornadaOperadorView: React.FC = () => {
       statusPresenca: string;
       tipoAusencia?: string;
       cargaHoraria: string;
-      tipo: 'Alinhamento' | 'Reciclagem' | 'Sinergia' | 'Novatos' | 'Outro';
+      tipo: 'Alinhamento' | 'Reciclagem' | 'Sinergia' | 'Novatos' | 'Migração' | 'Outro';
       observacoes?: string;
       frequencia?: number;
       nota?: number;
@@ -162,23 +185,37 @@ export const JornadaOperadorView: React.FC = () => {
     // 2. From Frequencias e Notas if available
     if (frequenciasNotas && Array.isArray(frequenciasNotas)) {
       frequenciasNotas.forEach(freq => {
-        if (freq.operadores && Array.isArray(freq.operadores)) {
-          const matchOp = freq.operadores.find((o: any) => o.loginBB && o.loginBB.toUpperCase() === targetLogin);
+        if (freq.alunos && Array.isArray(freq.alunos)) {
+          const matchOp = freq.alunos.find((o: any) => o.loginBB && o.loginBB.toUpperCase() === targetLogin);
           if (matchOp) {
+            const freqPercent = matchOp.frequenciaPercent ?? 0;
+            const notaFinal = matchOp.notaFinal ?? 0;
+
+            let statusPres = 'Presente';
+            if (matchOp.statusAprovacao === 'Aprovado') {
+              statusPres = 'Presente';
+            } else if (matchOp.statusAprovacao === 'Reprovado') {
+              statusPres = 'Reprovado';
+            } else if (matchOp.statusAprovacao === 'Em Andamento') {
+              statusPres = freqPercent >= 75 ? 'Presente' : 'Pendente';
+            } else {
+              statusPres = freqPercent >= 75 ? 'Presente' : 'Abaixo da Frequência';
+            }
+
             events.push({
               id: `freq-${freq.id}-${matchOp.loginBB}`,
               data: freq.dataInicio || new Date().toISOString().split('T')[0],
-              horario: freq.horario || '08:00',
-              treinamento: freq.nomeTurma || freq.tema || 'Treinamento de Turma',
+              horario: '08:00',
+              treinamento: freq.treinamento || 'Treinamento de Turma',
               solicitante: 'T&D/BB',
-              celula: freq.celula || 'GERAL',
-              multiplicador: freq.instrutor || 'T&D',
-              local: freq.sala || 'Sala de Treinamento',
-              statusPresenca: matchOp.statusPresenca || (matchOp.frequencia && matchOp.frequencia >= 75 ? 'Presente' : 'Abaixo da Frequência'),
+              celula: matchOp.celula || (freq.celulas && freq.celulas[0]) || 'GERAL',
+              multiplicador: freq.multiplicador || 'T&D',
+              local: 'Sala de Treinamento',
+              statusPresenca: statusPres,
               cargaHoraria: freq.cargaHoraria || '04:00:00',
-              tipo: freq.tipo === 'Novatos' ? 'Novatos' : freq.tipo === 'Reciclagem' ? 'Reciclagem' : 'Outro',
-              frequencia: matchOp.frequencia,
-              nota: matchOp.nota
+              tipo: freq.tipo === 'Novatos' ? 'Novatos' : freq.tipo === 'Reciclagem' ? 'Reciclagem' : freq.tipo === 'Sinergia' ? 'Sinergia' : freq.tipo === 'Migração' ? 'Migração' : 'Outro',
+              frequencia: freqPercent,
+              nota: notaFinal
             });
           }
         }
@@ -517,9 +554,17 @@ export const JornadaOperadorView: React.FC = () => {
                           {e.data} <span className="text-[10px] text-slate-400 font-normal">({e.horario})</span>
                         </td>
                         <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-white">
-                          {e.treinamento}
+                          <div className="flex items-center space-x-2">
+                            <span>{e.treinamento}</span>
+                            {isItemPendingSync(e.id) && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center space-x-1 shrink-0" title="Salvo localmente na máquina, pendente de sincronizar no Firestore">
+                                <CloudOff className="w-2.5 h-2.5" />
+                                <span>Pendente</span>
+                              </span>
+                            )}
+                          </div>
                           {e.frequencia !== undefined && (
-                            <span className="block text-[10px] text-indigo-600 dark:text-indigo-400 font-normal">
+                            <span className="block text-[10px] text-indigo-600 dark:text-indigo-400 font-normal mt-0.5">
                               Freq: {e.frequencia}% | Nota: {e.nota ?? 'N/A'}
                             </span>
                           )}
@@ -539,8 +584,9 @@ export const JornadaOperadorView: React.FC = () => {
                         <td className="px-3 py-2.5 text-slate-500">{e.local}</td>
                         <td className="px-3 py-2.5 text-center">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                            e.statusPresenca === 'Presente' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                            e.statusPresenca === 'Presente' || e.statusPresenca === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
                             e.statusPresenca === 'Dispensado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
+                            e.statusPresenca === 'Reprovado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
                             'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                           }`}>
                             {e.statusPresenca} {e.tipoAusencia ? `(${e.tipoAusencia})` : ''}

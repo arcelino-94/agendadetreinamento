@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Multiplicador, 
   CelulaAtendimento, 
@@ -8,7 +8,9 @@ import {
   FirebaseConfigCustom,
   OperadorQuadro,
   OperadorAlinhamento,
-  AlinhamentoTabulador
+  AlinhamentoTabulador,
+  ItemFrequenciaNota,
+  AlunoFrequenciaNota
 } from '../types';
 import { 
   INITIAL_MULTIPLICADORES, 
@@ -17,10 +19,22 @@ import {
   INITIAL_DEMANDAS, 
   INITIAL_TURMAS,
   INITIAL_OPERADORES,
-  INITIAL_TABULADOR
+  INITIAL_TABULADOR,
+  INITIAL_FREQUENCIAS_NOTAS
 } from '../data/mockData';
 import { isOverlapping } from '../lib/planningEngine';
-import { DEFAULT_FIREBASE_CONFIG, saveStateToFirestore, loadStateFromFirestore, subscribeToFirestore } from '../lib/firebase';
+import { 
+  DEFAULT_FIREBASE_CONFIG, 
+  saveStateToFirestore, 
+  loadStateFromFirestore, 
+  subscribeToCollection,
+  saveItemToFirestore,
+  deleteItemFromFirestore,
+  migrateMainStateToCollections,
+  saveFrequenciaNotaToFirestore,
+  deleteFrequenciaNotaFromFirestore,
+  atomicUpdateArrayInFirestoreDoc
+} from '../lib/firebase';
 
 interface AppContextType {
   multiplicadores: Multiplicador[];
@@ -30,6 +44,7 @@ interface AppContextType {
   turmas: Turma[];
   operadores: OperadorQuadro[];
   tabulador: AlinhamentoTabulador[];
+  frequenciasNotas: ItemFrequenciaNota[];
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   activeTab: string;
@@ -44,6 +59,13 @@ interface AppContextType {
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   isSaving: boolean;
   lastSyncTime: string | null;
+
+  // Pending Sync Queue State & Helper Functions
+  pendingSyncQueue: Record<string, { collectionName: string; item: any; timestamp: number }>;
+  isItemPendingSync: (id: string) => boolean;
+  hasPendingSync: boolean;
+  pendingSyncCount: number;
+  retrySync: () => Promise<void>;
 
   // Cloud force sync functions
   forceSaveToCloud: () => Promise<boolean>;
@@ -89,8 +111,25 @@ interface AppContextType {
   // Actions - Tabulador (Alinhamentos)
   addAlinhamentoTabulador: (item: Omit<AlinhamentoTabulador, 'id' | 'criadoEm'>) => void;
   updateAlinhamentoTabulador: (id: string, updates: Partial<AlinhamentoTabulador>) => void;
+  atomicUpdateTabuladorOperadores: (
+    id: string, 
+    newlyAddedOps: OperadorAlinhamento[], 
+    updatedOpsPairs: { oldOp: OperadorAlinhamento; newOp: OperadorAlinhamento }[], 
+    extraUpdates?: Partial<AlinhamentoTabulador>
+  ) => void;
   deleteAlinhamentoTabulador: (id: string) => void;
   toggleAlinhamentoStatus: (id: string) => void;
+
+  // Actions - Frequências e Notas
+  addFrequenciaNota: (item: Omit<ItemFrequenciaNota, 'id' | 'criadoEm'> & { id?: string; criadoEm?: string }) => void;
+  updateFrequenciaNota: (id: string, updates: Partial<ItemFrequenciaNota>) => void;
+  atomicUpdateFrequenciaNotaAlunos: (
+    id: string, 
+    newlyAddedAlunos: AlunoFrequenciaNota[], 
+    updatedAlunosPairs: { oldAluno: AlunoFrequenciaNota; newAluno: AlunoFrequenciaNota }[], 
+    extraUpdates?: Partial<ItemFrequenciaNota>
+  ) => void;
+  deleteFrequenciaNota: (id: string) => void;
 
   // Validation
   checkRoomConflict: (salaId: string, data: string, horarioInicio: string, horarioFim: string, excludeTurmaId?: string) => Turma | null;
@@ -102,6 +141,43 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+function calculateHorasTreinamento(presentes: number, chString: string): string {
+  if (!chString || presentes <= 0) return '0:00:00';
+  const parts = chString.split(':').map(p => parseInt(p, 10) || 0);
+  const chSeconds = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+  const totalSeconds = chSeconds * presentes;
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function diffArrayItems<T extends Record<string, any>>(oldArray: T[], newArray: T[]) {
+  const oldItemsToRemove: T[] = [];
+  const newItemsToAdd: T[] = [];
+
+  const oldJsonSet = new Set((oldArray || []).map(item => JSON.stringify(item)));
+  const newJsonSet = new Set((newArray || []).map(item => JSON.stringify(item)));
+
+  (newArray || []).forEach(newItem => {
+    const jsonStr = JSON.stringify(newItem);
+    if (!oldJsonSet.has(jsonStr)) {
+      newItemsToAdd.push(newItem);
+    }
+  });
+
+  (oldArray || []).forEach(oldItem => {
+    const jsonStr = JSON.stringify(oldItem);
+    if (!newJsonSet.has(jsonStr)) {
+      oldItemsToRemove.push(oldItem);
+    }
+  });
+
+  return { oldItemsToRemove, newItemsToAdd };
+}
 
 const LOCAL_STORAGE_KEY = 'td_callcenter_data_v2';
 const BROADCAST_CHANNEL = 'td_callcenter_broadcast_v2';
@@ -137,14 +213,171 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [operadores, setOperadores] = useState<OperadorQuadro[]>([]);
   const [tabulador, setTabulador] = useState<AlinhamentoTabulador[]>([]);
+  const [frequenciasNotas, setFrequenciasNotas] = useState<ItemFrequenciaNota[]>([]);
 
   // Firebase & Sync Status
   const [firebaseConfig, setFirebaseConfigState] = useState<FirebaseConfigCustom | null>(null);
+  const firebaseConfigRef = useRef(firebaseConfig);
+  useEffect(() => {
+    firebaseConfigRef.current = firebaseConfig;
+  }, [firebaseConfig]);
+
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   const isSaving = saveStatus === 'saving';
+
+  // Pending Sync Queue State & Deleted IDs Persistence
+  const [pendingSyncQueue, setPendingSyncQueue] = useState<Record<string, { collectionName: string; item: any; timestamp: number }>>(() => {
+    try {
+      const saved = localStorage.getItem('td_pending_sync_queue');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('td_deleted_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const pendingSyncQueueRef = useRef(pendingSyncQueue);
+  useEffect(() => {
+    pendingSyncQueueRef.current = pendingSyncQueue;
+    try {
+      localStorage.setItem('td_pending_sync_queue', JSON.stringify(pendingSyncQueue));
+    } catch (e) {
+      console.warn("Erro ao guardar fila de sincronização no localStorage:", e);
+    }
+  }, [pendingSyncQueue]);
+
+  const deletedIdsRef = useRef(deletedIds);
+  useEffect(() => {
+    deletedIdsRef.current = deletedIds;
+    try {
+      localStorage.setItem('td_deleted_ids', JSON.stringify(Array.from(deletedIds)));
+    } catch (e) {
+      console.warn("Erro ao guardar IDs excluídos no localStorage:", e);
+    }
+  }, [deletedIds]);
+
+  const addPendingSync = useCallback((collectionName: string, item: { id: string }) => {
+    if (!item || !item.id) return;
+    setPendingSyncQueue(prev => ({
+      ...prev,
+      [item.id]: {
+        collectionName,
+        item,
+        timestamp: Date.now()
+      }
+    }));
+  }, []);
+
+  const removePendingSync = useCallback((id: string) => {
+    if (!id) return;
+    setPendingSyncQueue(prev => {
+      if (!prev[id]) return prev;
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
+  }, []);
+
+  const markItemDeleted = useCallback((id: string) => {
+    if (!id) return;
+    setDeletedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    removePendingSync(id);
+  }, [removePendingSync]);
+
+  const isItemPendingSync = useCallback((id: string) => {
+    if (!id) return false;
+    const cleanId = id.replace(/^tab-/, '').replace(/^freq-/, '');
+    return Boolean(pendingSyncQueue[id] || pendingSyncQueue[cleanId]);
+  }, [pendingSyncQueue]);
+
+  const pendingSyncCount = Object.keys(pendingSyncQueue).length;
+  const hasPendingSync = pendingSyncCount > 0;
+
+  // Single Attempt to save item with automatic pending fallback
+  const attemptSaveItem = useCallback(async (collectionName: string, item: { id: string }) => {
+    if (!item || !item.id) return false;
+    const activeConfig = firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG;
+    setSaveStatus('saving');
+    const success = await saveItemToFirestore(collectionName, item, activeConfig);
+    if (success) {
+      removePendingSync(item.id);
+      setSaveStatus('saved');
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      return true;
+    } else {
+      addPendingSync(collectionName, item);
+      setSaveStatus('error');
+      return false;
+    }
+  }, [addPendingSync, removePendingSync]);
+
+  // Retry all pending items in background
+  const retrySync = useCallback(async () => {
+    const queue = pendingSyncQueueRef.current;
+    const keys = Object.keys(queue);
+    if (keys.length === 0) return;
+
+    const activeConfig = firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG;
+    setSaveStatus('saving');
+    let anyFailed = false;
+
+    for (const id of keys) {
+      const entry = queue[id];
+      if (entry && entry.item) {
+        const ok = await saveItemToFirestore(entry.collectionName, entry.item, activeConfig);
+        if (ok) {
+          removePendingSync(id);
+        } else {
+          anyFailed = true;
+        }
+      }
+    }
+
+    if (!anyFailed) {
+      setSaveStatus('saved');
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } else {
+      setSaveStatus('error');
+    }
+  }, [removePendingSync]);
+
+  // Periodic Retry Loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (Object.keys(pendingSyncQueueRef.current).length > 0) {
+        retrySync();
+      }
+    }, 5000);
+
+    const handleOnline = () => {
+      if (Object.keys(pendingSyncQueueRef.current).length > 0) {
+        retrySync();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [retrySync]);
 
   // Helper to normalize tabulador data schema safely
   const sanitizeTabuladorData = (items: any[]): AlinhamentoTabulador[] => {
@@ -201,6 +434,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTurmas(parsed.turmas || INITIAL_TURMAS);
         setOperadores(parsed.operadores || INITIAL_OPERADORES);
         setTabulador(sanitizeTabuladorData(parsed.tabulador));
+        setFrequenciasNotas(Array.isArray(parsed.frequenciasNotas) ? parsed.frequenciasNotas : INITIAL_FREQUENCIAS_NOTAS);
       } else {
         setMultiplicadores(INITIAL_MULTIPLICADORES);
         setCelulas(INITIAL_CELULAS);
@@ -209,6 +443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTurmas(INITIAL_TURMAS);
         setOperadores(INITIAL_OPERADORES);
         setTabulador(INITIAL_TABULADOR);
+        setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
       }
 
       const fbSaved = localStorage.getItem('td_callcenter_firebase_config');
@@ -242,7 +477,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return pass.trim() === securityPassword;
   };
 
-  // 2. Salvar no LocalStorage, Firestore e Broadcast
+  // 2. Salvar no LocalStorage e Broadcast
   const persistAndNotify = useCallback((data: {
     multiplicadores: Multiplicador[];
     celulas: CelulaAtendimento[];
@@ -251,6 +486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     turmas: Turma[];
     operadores: OperadorQuadro[];
     tabulador: AlinhamentoTabulador[];
+    frequenciasNotas?: ItemFrequenciaNota[];
   }) => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
@@ -259,78 +495,160 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bc.postMessage({ type: 'DATA_UPDATED', data });
         bc.close();
       }
-      setSaveStatus('saving');
-      saveStateToFirestore(data, firebaseConfig || DEFAULT_FIREBASE_CONFIG).then((success) => {
-        if (success) {
-          setSaveStatus('saved');
-          setLastSyncTime(new Date().toLocaleTimeString());
-          setTimeout(() => {
-            setSaveStatus('idle');
-          }, 2500);
-        } else {
-          setSaveStatus('error');
-          setTimeout(() => setSaveStatus('idle'), 3000);
-        }
-      }).catch(() => {
-        setSaveStatus('error');
-        setTimeout(() => setSaveStatus('idle'), 3000);
-      });
+      setSaveStatus('saved');
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
-      console.error('Erro ao persistir estado:', err);
-      setSaveStatus('error');
+      console.error('Erro ao salvar localmente:', err);
     }
-  }, [firebaseConfig]);
+  }, []);
 
-  // Listener Firestore em Tempo Real
+  // Listener Firestore em Tempo Real por Coleção Independente (Smart Merge - Zero Data Loss)
   useEffect(() => {
     if (!isFirebaseConnected) return;
-    const unsubscribe = subscribeToFirestore((data) => {
-      if (data && Object.keys(data).length > 0) {
-        if (Array.isArray(data.multiplicadores)) setMultiplicadores(data.multiplicadores);
-        if (Array.isArray(data.celulas)) setCelulas(data.celulas);
-        if (Array.isArray(data.salas)) setSalas(data.salas);
-        if (Array.isArray(data.demandas)) setDemandas(data.demandas);
-        if (Array.isArray(data.turmas)) setTurmas(data.turmas);
-        if (Array.isArray(data.operadores)) setOperadores(data.operadores);
-        if (Array.isArray(data.tabulador)) setTabulador(data.tabulador);
 
-        // Sync local storage with current cloud snapshot
-        try {
-          const merged = {
-            multiplicadores: data.multiplicadores || [],
-            celulas: data.celulas || [],
-            salas: data.salas || [],
-            demandas: data.demandas || [],
-            turmas: data.turmas || [],
-            operadores: data.operadores || [],
-            tabulador: data.tabulador || [],
-          };
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
-        } catch (e) {
-          console.warn('Erro ao atualizar localStorage com snapshot:', e);
-        }
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
 
-        setSaveStatus('saved');
-        setLastSyncTime(new Date().toLocaleTimeString());
-        setTimeout(() => setSaveStatus('idle'), 2500);
-      } else if (data === null) {
-        // Se a nuvem estiver vazia/inexistente, enviar estado inicial para criar o documento Firestore
-        saveStateToFirestore({
-          multiplicadores,
-          celulas,
-          salas,
-          demandas,
-          turmas,
-          operadores,
-          tabulador
-        }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+    // Migração automática única do antigo main_state se ele existir
+    migrateMainStateToCollections(activeConfig);
+
+    const seeded = {
+      multiplicadores: false,
+      celulas: false,
+      salas: false,
+      demandas: false,
+      turmas: false,
+      operadores: false,
+      tabulador: false,
+      frequenciasNotas: false,
+    };
+
+    const unsubMults = subscribeToCollection<Multiplicador>('multiplicadores', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setMultiplicadores(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.multiplicadores) {
+        seeded.multiplicadores = true;
+        INITIAL_MULTIPLICADORES.forEach(item => attemptSaveItem('multiplicadores', item));
+        setMultiplicadores(INITIAL_MULTIPLICADORES);
       }
-    }, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+    }, activeConfig);
+
+    const unsubCelulas = subscribeToCollection<CelulaAtendimento>('celulas', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setCelulas(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.celulas) {
+        seeded.celulas = true;
+        INITIAL_CELULAS.forEach(item => attemptSaveItem('celulas', item));
+        setCelulas(INITIAL_CELULAS);
+      }
+    }, activeConfig);
+
+    const unsubSalas = subscribeToCollection<SalaTreinamento>('salas', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setSalas(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.salas) {
+        seeded.salas = true;
+        INITIAL_SALAS.forEach(item => attemptSaveItem('salas', item));
+        setSalas(INITIAL_SALAS);
+      }
+    }, activeConfig);
+
+    const unsubDemandas = subscribeToCollection<Demanda>('demandas', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setDemandas(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.demandas) {
+        seeded.demandas = true;
+        INITIAL_DEMANDAS.forEach(item => attemptSaveItem('demandas', item));
+        setDemandas(INITIAL_DEMANDAS);
+      }
+    }, activeConfig);
+
+    const unsubTurmas = subscribeToCollection<Turma>('turmas', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setTurmas(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.turmas) {
+        seeded.turmas = true;
+        INITIAL_TURMAS.forEach(item => attemptSaveItem('turmas', item));
+        setTurmas(INITIAL_TURMAS);
+      }
+    }, activeConfig);
+
+    const unsubOperadores = subscribeToCollection<OperadorQuadro>('operadores', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setOperadores(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.operadores) {
+        seeded.operadores = true;
+        INITIAL_OPERADORES.forEach(item => attemptSaveItem('operadores', item));
+        setOperadores(INITIAL_OPERADORES);
+      }
+    }, activeConfig);
+
+    const unsubTabulador = subscribeToCollection<AlinhamentoTabulador>('tabulador', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setTabulador(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.tabulador) {
+        seeded.tabulador = true;
+        INITIAL_TABULADOR.forEach(item => attemptSaveItem('tabulador', item));
+        setTabulador(INITIAL_TABULADOR);
+      }
+    }, activeConfig);
+
+    const unsubFreq = subscribeToCollection<ItemFrequenciaNota>('frequencias_notas', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setFrequenciasNotas(prev => {
+          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
+          return [...cloudItems, ...retainedLocal];
+        });
+      } else if (!seeded.frequenciasNotas) {
+        seeded.frequenciasNotas = true;
+        INITIAL_FREQUENCIAS_NOTAS.forEach(item => attemptSaveItem('frequencias_notas', item));
+        setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
+      }
+    }, activeConfig);
+
+    setSaveStatus('saved');
+    setLastSyncTime(new Date().toLocaleTimeString());
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubMults) unsubMults();
+      if (unsubCelulas) unsubCelulas();
+      if (unsubSalas) unsubSalas();
+      if (unsubDemandas) unsubDemandas();
+      if (unsubTurmas) unsubTurmas();
+      if (unsubOperadores) unsubOperadores();
+      if (unsubTabulador) unsubTabulador();
+      if (unsubFreq) unsubFreq();
     };
-  }, [isFirebaseConnected, firebaseConfig]);
+  }, [isFirebaseConnected, firebaseConfig, attemptSaveItem]);
 
   const setFirebaseConfig = (config: FirebaseConfigCustom | null) => {
     setFirebaseConfigState(config);
@@ -345,6 +663,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Forçar Salvamento Manual na Nuvem
   const forceSaveToCloud = useCallback(async (): Promise<boolean> => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const currentState = {
       multiplicadores,
       celulas,
@@ -353,9 +672,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       turmas,
       operadores,
       tabulador,
+      frequenciasNotas
     };
     setSaveStatus('saving');
-    const success = await saveStateToFirestore(currentState, firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+    const success = await saveStateToFirestore(currentState, activeConfig);
     if (success) {
       setSaveStatus('saved');
       setLastSyncTime(new Date().toLocaleTimeString());
@@ -365,12 +685,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
     return success;
-  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, firebaseConfig]);
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig]);
 
   // Forçar Carregamento Manual da Nuvem (Sobrescrever local)
   const forceReloadFromCloud = useCallback(async (): Promise<boolean> => {
     setSaveStatus('saving');
-    const cloudData = await loadStateFromFirestore(firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    const cloudData = await loadStateFromFirestore(activeConfig);
     if (cloudData) {
       if (Array.isArray(cloudData.multiplicadores)) setMultiplicadores(cloudData.multiplicadores);
       if (Array.isArray(cloudData.celulas)) setCelulas(cloudData.celulas);
@@ -379,6 +700,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(cloudData.turmas)) setTurmas(cloudData.turmas);
       if (Array.isArray(cloudData.operadores)) setOperadores(cloudData.operadores);
       if (Array.isArray(cloudData.tabulador)) setTabulador(cloudData.tabulador);
+      if (Array.isArray(cloudData.frequenciasNotas)) setFrequenciasNotas(cloudData.frequenciasNotas);
 
       try {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
@@ -389,6 +711,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           turmas: cloudData.turmas || [],
           operadores: cloudData.operadores || [],
           tabulador: cloudData.tabulador || [],
+          frequenciasNotas: cloudData.frequenciasNotas || []
         }));
       } catch (e) {
         console.warn('Erro ao atualizar localStorage:', e);
@@ -447,6 +770,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // --- Ações de Demandas ---
   const addDemanda = (demandaData: Omit<Demanda, 'id' | 'dataCriacao'>): Demanda => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const newId = `DEM-${Math.floor(1000 + Math.random() * 9000)}`;
     const newDemanda: Demanda = {
       ...demandaData,
@@ -498,19 +822,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const nextTabulador = [newTabuladorItem, ...tabulador];
 
+    // If demand is Sinergia, Migração, Novatos or Retorno LMG, create a Frequencias & Notas item automatically
+    let nextFreqList = frequenciasNotas;
+    if (['Sinergia', 'Migração', 'Novatos', 'Retorno LMG'].includes(demandaData.tipo)) {
+      const alunosList: AlunoFrequenciaNota[] = ops.map((op, idx) => ({
+        id: `aln-${newId}-${idx}`,
+        matDP: op.matDP || 'N/A',
+        loginBB: op.loginBB || 'N/A',
+        nome: op.nome || op.loginBB || 'N/A',
+        supervisor: op.supervisor || 'N/A',
+        gerente: op.gerente || 'N/A',
+        celula: op.segmento || demandaData.celulaNome || 'GERAL',
+        frequenciaPercent: 100,
+        notaFinal: 10,
+        statusAprovacao: 'Em Andamento'
+      }));
+
+      const newFreqItem: ItemFrequenciaNota = {
+        id: `FN-${newId}`,
+        demandaId: newId,
+        treinamento: demandaData.tema || 'TREINAMENTO DE FREQUÊNCIA E NOTAS',
+        tipo: demandaData.tipo as any,
+        celulas: [demandaData.celulaNome || 'GERAL'],
+        dataInicio: demandaData.dataInicio || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
+        dataFim: demandaData.dataFim || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
+        multiplicador: demandaData.multiplicadorNome || 'T&D/BB',
+        cargaHoraria: '40h',
+        alunos: alunosList,
+        status: 'Em Andamento',
+        criadoEm: new Date().toISOString()
+      };
+
+      nextFreqList = [newFreqItem, ...frequenciasNotas];
+      setFrequenciasNotas(nextFreqList);
+      saveItemToFirestore('frequencias_notas', newFreqItem, activeConfig);
+    }
+
     setDemandas(nextDemandas);
     setTabulador(nextTabulador);
-    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador });
+
+    saveItemToFirestore('demandas', newDemanda, activeConfig);
+    saveItemToFirestore('tabulador', newTabuladorItem, activeConfig);
+
+    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador, frequenciasNotas: nextFreqList });
     return newDemanda;
   };
 
   const updateDemanda = (id: string, updates: Partial<Demanda>) => {
-    const nextDemandas = demandas.map(d => d.id === id ? { ...d, ...updates } : d);
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updatedDemanda: Demanda | null = null;
+    const nextDemandas = demandas.map(d => {
+      if (d.id === id) {
+        updatedDemanda = { ...d, ...updates };
+        return updatedDemanda;
+      }
+      return d;
+    });
 
+    let updatedTab: AlinhamentoTabulador | null = null;
     const nextTabulador = tabulador.map(t => {
       if (t.id === `TAB-${id}`) {
         const convocados = updates.qtdOperadores !== undefined ? updates.qtdOperadores : t.convocados;
-        return {
+        updatedTab = {
           ...t,
           treinamento: updates.tema !== undefined ? updates.tema : t.treinamento,
           celula: updates.celulaNome !== undefined ? updates.celulaNome : t.celula,
@@ -518,26 +891,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           presentes: convocados,
           observacoes: updates.observacoes !== undefined ? updates.observacoes : t.observacoes
         };
+        return updatedTab;
       }
       return t;
     });
 
     setDemandas(nextDemandas);
     setTabulador(nextTabulador);
+
+    if (updatedDemanda) saveItemToFirestore('demandas', updatedDemanda, activeConfig);
+    if (updatedTab) saveItemToFirestore('tabulador', updatedTab, activeConfig);
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador });
   };
 
   const deleteDemanda = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const nextDemandas = demandas.filter(d => d.id !== id);
     const nextTabulador = tabulador.filter(t => t.id !== `TAB-${id}`);
 
     setDemandas(nextDemandas);
     setTabulador(nextTabulador);
+
+    deleteItemFromFirestore('demandas', id, activeConfig);
+    deleteItemFromFirestore('tabulador', `TAB-${id}`, activeConfig);
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador });
   };
 
   // --- Ações de Turmas ---
   const addTurma = (turmaData: Omit<Turma, 'id'>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const conflitoSala = checkRoomConflict(
       turmaData.salaId,
       turmaData.data,
@@ -574,25 +958,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const nextTurmas = [newTurma, ...turmas];
 
+    const updatedDemandas: Demanda[] = [];
     const nextDemandas = demandas.map(d => {
       if (turmaData.demandaIds.includes(d.id)) {
-        return {
+        const updated = {
           ...d,
           status: 'Agendado' as const,
           turmaAgendadaId: newTurmaId
         };
+        updatedDemandas.push(updated);
+        return updated;
       }
       return d;
     });
 
     setTurmas(nextTurmas);
     setDemandas(nextDemandas);
+
+    saveItemToFirestore('turmas', newTurma, activeConfig);
+    updatedDemandas.forEach(d => saveItemToFirestore('demandas', d, activeConfig));
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas: nextTurmas, operadores, tabulador });
 
     return { success: true, turma: newTurma };
   };
 
   const updateTurma = (id: string, updates: Partial<Turma>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const currentTurma = turmas.find(t => t.id === id);
     if (!currentTurma) return { success: false, error: 'Turma não encontrada.' };
 
@@ -620,25 +1012,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    const nextTurmas = turmas.map(t => t.id === id ? { ...t, ...updates } : t);
+    let updatedTurma: Turma | null = null;
+    const nextTurmas = turmas.map(t => {
+      if (t.id === id) {
+        updatedTurma = { ...t, ...updates };
+        return updatedTurma;
+      }
+      return t;
+    });
+
     setTurmas(nextTurmas);
+    if (updatedTurma) saveItemToFirestore('turmas', updatedTurma, activeConfig);
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas: nextTurmas, operadores, tabulador });
     return { success: true };
   };
 
   const deleteTurma = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const targetTurma = turmas.find(t => t.id === id);
     const nextTurmas = turmas.filter(t => t.id !== id);
 
     let nextDemandas = demandas;
+    const updatedDemandas: Demanda[] = [];
     if (targetTurma && targetTurma.demandaIds.length > 0) {
       nextDemandas = demandas.map(d => {
         if (targetTurma.demandaIds.includes(d.id)) {
-          return {
+          const reverted = {
             ...d,
             status: 'Novo' as const,
-            turmaAgendadaId: undefined
+            turmaAgendadaId: null
           };
+          updatedDemandas.push(reverted);
+          return reverted;
         }
         return d;
       });
@@ -646,103 +1052,159 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setTurmas(nextTurmas);
+
+    deleteItemFromFirestore('turmas', id, activeConfig);
+    updatedDemandas.forEach(d => saveItemToFirestore('demandas', d, activeConfig));
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas: nextTurmas, operadores, tabulador });
   };
 
   // --- Ações de Multiplicadores ---
   const addMultiplicador = (multiplicadorData: Omit<Multiplicador, 'id'>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const newMult: Multiplicador = {
       ...multiplicadorData,
       id: `mult-${Date.now()}`
     };
     const nextMults = [...multiplicadores, newMult];
     setMultiplicadores(nextMults);
+    saveItemToFirestore('multiplicadores', newMult, activeConfig);
     persistAndNotify({ multiplicadores: nextMults, celulas, salas, demandas, turmas, operadores, tabulador });
   };
 
   const updateMultiplicador = (id: string, updates: Partial<Multiplicador>) => {
-    const nextMults = multiplicadores.map(m => m.id === id ? { ...m, ...updates } : m);
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updated: Multiplicador | null = null;
+    const nextMults = multiplicadores.map(m => {
+      if (m.id === id) {
+        updated = { ...m, ...updates };
+        return updated;
+      }
+      return m;
+    });
     setMultiplicadores(nextMults);
+    if (updated) saveItemToFirestore('multiplicadores', updated, activeConfig);
     persistAndNotify({ multiplicadores: nextMults, celulas, salas, demandas, turmas, operadores, tabulador });
   };
 
   const deleteMultiplicador = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const nextMults = multiplicadores.filter(m => m.id !== id);
     setMultiplicadores(nextMults);
+    deleteItemFromFirestore('multiplicadores', id, activeConfig);
     persistAndNotify({ multiplicadores: nextMults, celulas, salas, demandas, turmas, operadores, tabulador });
   };
 
   // --- Ações de Células ---
   const addCelula = (celulaData: Omit<CelulaAtendimento, 'id'>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const newCel: CelulaAtendimento = {
       ...celulaData,
       id: `cel-${Date.now()}`
     };
     const nextCelulas = [...celulas, newCel];
     setCelulas(nextCelulas);
+    saveItemToFirestore('celulas', newCel, activeConfig);
     persistAndNotify({ multiplicadores, celulas: nextCelulas, salas, demandas, turmas, operadores, tabulador });
   };
 
   const updateCelula = (id: string, updates: Partial<CelulaAtendimento>) => {
-    const nextCelulas = celulas.map(c => c.id === id ? { ...c, ...updates } : c);
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updated: CelulaAtendimento | null = null;
+    const nextCelulas = celulas.map(c => {
+      if (c.id === id) {
+        updated = { ...c, ...updates };
+        return updated;
+      }
+      return c;
+    });
     setCelulas(nextCelulas);
+    if (updated) saveItemToFirestore('celulas', updated, activeConfig);
     persistAndNotify({ multiplicadores, celulas: nextCelulas, salas, demandas, turmas, operadores, tabulador });
   };
 
   const deleteCelula = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const nextCelulas = celulas.filter(c => c.id !== id);
     setCelulas(nextCelulas);
+    deleteItemFromFirestore('celulas', id, activeConfig);
     persistAndNotify({ multiplicadores, celulas: nextCelulas, salas, demandas, turmas, operadores, tabulador });
   };
 
   // --- Ações de Salas ---
   const addSala = (salaData: Omit<SalaTreinamento, 'id'>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const newSala: SalaTreinamento = {
       ...salaData,
       id: `sala-${Date.now()}`
     };
     const nextSalas = [...salas, newSala];
     setSalas(nextSalas);
+    saveItemToFirestore('salas', newSala, activeConfig);
     persistAndNotify({ multiplicadores, celulas, salas: nextSalas, demandas, turmas, operadores, tabulador });
   };
 
   const updateSala = (id: string, updates: Partial<SalaTreinamento>) => {
-    const nextSalas = salas.map(s => s.id === id ? { ...s, ...updates } : s);
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updated: SalaTreinamento | null = null;
+    const nextSalas = salas.map(s => {
+      if (s.id === id) {
+        updated = { ...s, ...updates };
+        return updated;
+      }
+      return s;
+    });
     setSalas(nextSalas);
+    if (updated) saveItemToFirestore('salas', updated, activeConfig);
     persistAndNotify({ multiplicadores, celulas, salas: nextSalas, demandas, turmas, operadores, tabulador });
   };
 
   const deleteSala = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const nextSalas = salas.filter(s => s.id !== id);
     setSalas(nextSalas);
+    deleteItemFromFirestore('salas', id, activeConfig);
     persistAndNotify({ multiplicadores, celulas, salas: nextSalas, demandas, turmas, operadores, tabulador });
   };
 
   // --- Ações de Operadores ---
   const addOperador = (opData: Omit<OperadorQuadro, 'id'>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const newOp: OperadorQuadro = {
       ...opData,
       id: `op-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
     };
     const nextOp = [newOp, ...operadores];
     setOperadores(nextOp);
+    saveItemToFirestore('operadores', newOp, activeConfig);
     persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: nextOp, tabulador });
   };
 
   const updateOperador = (id: string, updates: Partial<OperadorQuadro>) => {
-    const nextOp = operadores.map(o => o.id === id ? { ...o, ...updates } : o);
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updated: OperadorQuadro | null = null;
+    const nextOp = operadores.map(o => {
+      if (o.id === id) {
+        updated = { ...o, ...updates };
+        return updated;
+      }
+      return o;
+    });
     setOperadores(nextOp);
+    if (updated) saveItemToFirestore('operadores', updated, activeConfig);
     persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: nextOp, tabulador });
   };
 
   const deleteOperador = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const nextOp = operadores.filter(o => o.id !== id);
     setOperadores(nextOp);
+    deleteItemFromFirestore('operadores', id, activeConfig);
     persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: nextOp, tabulador });
   };
 
   const bulkSetOperadores = (novosOperadores: OperadorQuadro[]) => {
-    // Create lookup map for new active operators
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const opMap = new Map<string, OperadorQuadro>();
     novosOperadores.forEach(op => {
       if (op.loginBB) {
@@ -750,7 +1212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    // Update matching operators in tabulador without deleting any tabulador records
+    const changedTabItems: AlinhamentoTabulador[] = [];
     const updatedTabulador = tabulador.map(item => {
       if (!Array.isArray(item.operadores) || item.operadores.length === 0) return item;
       
@@ -773,11 +1235,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return op;
       });
 
-      return changed ? { ...item, operadores: updatedOps } : item;
+      if (changed) {
+        const newItem = { ...item, operadores: updatedOps };
+        changedTabItems.push(newItem);
+        return newItem;
+      }
+      return item;
     });
 
     setOperadores(novosOperadores);
     setTabulador(updatedTabulador);
+
+    novosOperadores.forEach(op => saveItemToFirestore('operadores', op, activeConfig));
+    changedTabItems.forEach(item => saveItemToFirestore('tabulador', item, activeConfig));
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: novosOperadores, tabulador: updatedTabulador });
   };
 
@@ -796,36 +1267,357 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const nextTab = [newItem, ...tabulador];
     setTabulador(nextTab);
-    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab });
+    attemptSaveItem('tabulador', newItem);
+    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab, frequenciasNotas });
   };
 
-  const updateAlinhamentoTabulador = (id: string, updates: Partial<AlinhamentoTabulador>) => {
-    const nextTab = tabulador.map(t => t.id === id ? { ...t, ...updates } : t);
+  const updateAlinhamentoTabulador = useCallback((id: string, updates: Partial<AlinhamentoTabulador>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updatedItem: AlinhamentoTabulador | null = null;
+    let oldItem: AlinhamentoTabulador | null = null;
+
+    const nextTab = tabulador.map(t => {
+      if (t.id === id) {
+        oldItem = t;
+        let newOps = updates.operadores !== undefined ? updates.operadores : t.operadores;
+        
+        let convocados = updates.convocados !== undefined ? updates.convocados : t.convocados;
+        let presentes = updates.presentes !== undefined ? updates.presentes : t.presentes;
+        let dispensado = updates.dispensado !== undefined ? updates.dispensado : t.dispensado;
+        let pendentes = updates.pendentes !== undefined ? updates.pendentes : t.pendentes;
+        let percentual = updates.percentual !== undefined ? updates.percentual : t.percentual;
+        let horasTreinamento = updates.horasTreinamento !== undefined ? updates.horasTreinamento : t.horasTreinamento;
+
+        if (updates.operadores !== undefined) {
+          convocados = newOps.length;
+          presentes = newOps.filter(o => o.statusPresenca === 'Presente').length;
+          dispensado = newOps.filter(o => o.statusPresenca === 'Dispensado').length;
+          pendentes = Math.max(0, convocados - presentes - dispensado);
+          percentual = convocados > 0 ? Math.round((presentes / convocados) * 100) : 0;
+          const ch = updates.cargaHoraria || t.cargaHoraria || '0:20:00';
+          horasTreinamento = calculateHorasTreinamento(presentes, ch);
+        }
+
+        updatedItem = {
+          ...t,
+          ...updates,
+          convocados,
+          presentes,
+          dispensado,
+          pendentes,
+          percentual,
+          horasTreinamento,
+          operadores: newOps
+        };
+        return updatedItem;
+      }
+      return t;
+    });
+
     setTabulador(nextTab);
-    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab });
-  };
+
+    if (updatedItem && oldItem) {
+      if (updates.operadores !== undefined) {
+        const { oldItemsToRemove, newItemsToAdd } = diffArrayItems(
+          (oldItem as AlinhamentoTabulador).operadores || [],
+          (updatedItem as AlinhamentoTabulador).operadores || []
+        );
+
+        const extraFields: Record<string, any> = { ...updates };
+        delete extraFields.operadores;
+        
+        extraFields.convocados = updatedItem.convocados;
+        extraFields.presentes = updatedItem.presentes;
+        extraFields.dispensado = updatedItem.dispensado;
+        extraFields.pendentes = updatedItem.pendentes;
+        extraFields.percentual = updatedItem.percentual;
+        extraFields.horasTreinamento = updatedItem.horasTreinamento;
+
+        atomicUpdateArrayInFirestoreDoc(
+          'tabulador',
+          id,
+          'operadores',
+          oldItemsToRemove,
+          newItemsToAdd,
+          extraFields,
+          activeConfig
+        ).catch(() => {
+          attemptSaveItem('tabulador', updatedItem!);
+        });
+      } else {
+        attemptSaveItem('tabulador', updatedItem);
+      }
+    }
+
+    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab, frequenciasNotas });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig, attemptSaveItem, persistAndNotify]);
+
+  const atomicUpdateTabuladorOperadores = useCallback((
+    id: string,
+    newlyAddedOps: OperadorAlinhamento[],
+    updatedOpsPairs: { oldOp: OperadorAlinhamento; newOp: OperadorAlinhamento }[],
+    extraUpdates?: Partial<AlinhamentoTabulador>
+  ) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    let updatedItem: AlinhamentoTabulador | null = null;
+
+    const nextTab = tabulador.map(t => {
+      if (t.id === id) {
+        const existingOps = t.operadores || [];
+        let nextOps = [...existingOps];
+
+        updatedOpsPairs.forEach(({ oldOp, newOp }) => {
+          const idx = nextOps.findIndex(o => 
+            JSON.stringify(o) === JSON.stringify(oldOp) ||
+            (o.loginBB && newOp.loginBB && o.loginBB === newOp.loginBB) ||
+            (o.matDP && newOp.matDP && o.matDP === newOp.matDP)
+          );
+          if (idx >= 0) {
+            nextOps[idx] = newOp;
+          }
+        });
+
+        newlyAddedOps.forEach(newOp => {
+          nextOps.push(newOp);
+        });
+
+        const convocados = nextOps.length;
+        const presentes = nextOps.filter(o => o.statusPresenca === 'Presente').length;
+        const dispensado = nextOps.filter(o => o.statusPresenca === 'Dispensado').length;
+        const pendentes = Math.max(0, convocados - presentes - dispensado);
+        const percentual = convocados > 0 ? Math.round((presentes / convocados) * 100) : 0;
+        const ch = extraUpdates?.cargaHoraria || t.cargaHoraria || '0:20:00';
+        const horasTreinamento = calculateHorasTreinamento(presentes, ch);
+
+        const aggregated = {
+          convocados,
+          presentes,
+          dispensado,
+          pendentes,
+          percentual,
+          horasTreinamento,
+          ...extraUpdates
+        };
+
+        updatedItem = {
+          ...t,
+          ...aggregated,
+          operadores: nextOps
+        };
+        return updatedItem;
+      }
+      return t;
+    });
+
+    setTabulador(nextTab);
+
+    const oldItemsToRemove = updatedOpsPairs.map(p => p.oldOp);
+    const newItemsToAdd = [...newlyAddedOps, ...updatedOpsPairs.map(p => p.newOp)];
+
+    if (updatedItem) {
+      const extraFieldsToUpdate: Record<string, any> = {
+        convocados: updatedItem.convocados,
+        presentes: updatedItem.presentes,
+        dispensado: updatedItem.dispensado,
+        pendentes: updatedItem.pendentes,
+        percentual: updatedItem.percentual,
+        horasTreinamento: updatedItem.horasTreinamento,
+        ...(extraUpdates || {})
+      };
+      delete extraFieldsToUpdate.operadores;
+
+      atomicUpdateArrayInFirestoreDoc(
+        'tabulador',
+        id,
+        'operadores',
+        oldItemsToRemove,
+        newItemsToAdd,
+        extraFieldsToUpdate,
+        activeConfig
+      ).catch(() => {
+        attemptSaveItem('tabulador', updatedItem!);
+      });
+    }
+
+    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab, frequenciasNotas });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig, attemptSaveItem, persistAndNotify]);
 
   const deleteAlinhamentoTabulador = (id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
     const nextTab = tabulador.filter(t => t.id !== id);
     setTabulador(nextTab);
-    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab });
+    deleteItemFromFirestore('tabulador', id, activeConfig);
+    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab, frequenciasNotas });
   };
 
   const toggleAlinhamentoStatus = (id: string) => {
+    let updated: AlinhamentoTabulador | null = null;
     const nextTab = tabulador.map(t => {
       if (t.id === id) {
-        return {
+        updated = {
           ...t,
           status: (t.status === 'Pendente' ? 'Concluído' : 'Pendente') as 'Pendente' | 'Concluído'
         };
+        return updated;
       }
       return t;
     });
     setTabulador(nextTab);
-    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab });
+    if (updated) attemptSaveItem('tabulador', updated);
+    persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador: nextTab, frequenciasNotas });
   };
 
+  // --- Ações de Frequências e Notas ---
+  const addFrequenciaNota = useCallback((itemData: Omit<ItemFrequenciaNota, 'id' | 'criadoEm'> & { id?: string; criadoEm?: string }) => {
+    const newId = itemData.id || `FN-${Math.floor(100 + Math.random() * 900)}`;
+    const newItem: ItemFrequenciaNota = {
+      ...itemData,
+      id: newId,
+      criadoEm: itemData.criadoEm || new Date().toISOString()
+    } as ItemFrequenciaNota;
+
+    setFrequenciasNotas(prev => {
+      const idx = prev.findIndex(f => f.id === newItem.id);
+      let nextList: ItemFrequenciaNota[];
+      if (idx >= 0) {
+        nextList = [...prev];
+        nextList[idx] = newItem;
+      } else {
+        nextList = [newItem, ...prev];
+      }
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas: nextList });
+      return nextList;
+    });
+
+    attemptSaveItem('frequencias_notas', newItem);
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, attemptSaveItem, persistAndNotify]);
+
+  const updateFrequenciaNota = useCallback((id: string, updates: Partial<ItemFrequenciaNota>) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+
+    setFrequenciasNotas(prev => {
+      let updatedItem: ItemFrequenciaNota | null = null;
+      let oldItem: ItemFrequenciaNota | null = null;
+
+      const nextList = prev.map(item => {
+        if (item.id === id) {
+          oldItem = item;
+          updatedItem = { ...item, ...updates };
+          return updatedItem;
+        }
+        return item;
+      });
+
+      if (updatedItem && oldItem) {
+        if (updates.alunos !== undefined) {
+          const { oldItemsToRemove, newItemsToAdd } = diffArrayItems(
+            (oldItem as ItemFrequenciaNota).alunos || [],
+            (updatedItem as ItemFrequenciaNota).alunos || []
+          );
+
+          const extraFields: Record<string, any> = { ...updates };
+          delete extraFields.alunos;
+
+          atomicUpdateArrayInFirestoreDoc(
+            'frequencias_notas',
+            id,
+            'alunos',
+            oldItemsToRemove,
+            newItemsToAdd,
+            extraFields,
+            activeConfig
+          ).catch(() => {
+            attemptSaveItem('frequencias_notas', updatedItem!);
+          });
+        } else {
+          attemptSaveItem('frequencias_notas', updatedItem);
+        }
+      }
+
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas: nextList });
+      return nextList;
+    });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, firebaseConfig, attemptSaveItem, persistAndNotify]);
+
+  const atomicUpdateFrequenciaNotaAlunos = useCallback((
+    id: string,
+    newlyAddedAlunos: AlunoFrequenciaNota[],
+    updatedAlunosPairs: { oldAluno: AlunoFrequenciaNota; newAluno: AlunoFrequenciaNota }[],
+    extraUpdates?: Partial<ItemFrequenciaNota>
+  ) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+
+    setFrequenciasNotas(prev => {
+      let updatedItem: ItemFrequenciaNota | null = null;
+      const nextList = prev.map(item => {
+        if (item.id === id) {
+          const existingAlunos = item.alunos || [];
+          let nextAlunos = [...existingAlunos];
+
+          updatedAlunosPairs.forEach(({ oldAluno, newAluno }) => {
+            const idx = nextAlunos.findIndex(a => 
+              JSON.stringify(a) === JSON.stringify(oldAluno) || 
+              (a.id && newAluno.id && a.id === newAluno.id) ||
+              (a.loginBB && newAluno.loginBB && a.loginBB === newAluno.loginBB)
+            );
+            if (idx >= 0) {
+              nextAlunos[idx] = newAluno;
+            }
+          });
+
+          newlyAddedAlunos.forEach(newAluno => {
+            nextAlunos.push(newAluno);
+          });
+
+          updatedItem = {
+            ...item,
+            ...(extraUpdates || {}),
+            alunos: nextAlunos
+          };
+          return updatedItem;
+        }
+        return item;
+      });
+
+      const oldItemsToRemove = updatedAlunosPairs.map(p => p.oldAluno);
+      const newItemsToAdd = [...newlyAddedAlunos, ...updatedAlunosPairs.map(p => p.newAluno)];
+
+      if (updatedItem) {
+        const extraFieldsToUpdate: Record<string, any> = { ...(extraUpdates || {}) };
+        delete extraFieldsToUpdate.alunos;
+
+        atomicUpdateArrayInFirestoreDoc(
+          'frequencias_notas',
+          id,
+          'alunos',
+          oldItemsToRemove,
+          newItemsToAdd,
+          extraFieldsToUpdate,
+          activeConfig
+        ).catch(() => {
+          attemptSaveItem('frequencias_notas', updatedItem!);
+        });
+      }
+
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas: nextList });
+      return nextList;
+    });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, firebaseConfig, attemptSaveItem, persistAndNotify]);
+
+  const deleteFrequenciaNota = useCallback((id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
+    setFrequenciasNotas(prev => {
+      const nextList = prev.filter(item => item.id !== id);
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas: nextList });
+      return nextList;
+    });
+    deleteItemFromFirestore('frequencias_notas', id, activeConfig);
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, firebaseConfig, markItemDeleted, persistAndNotify]);
+
   const resetToInitialData = () => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     setMultiplicadores(INITIAL_MULTIPLICADORES);
     setCelulas(INITIAL_CELULAS);
     setSalas(INITIAL_SALAS);
@@ -833,7 +1625,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTurmas(INITIAL_TURMAS);
     setOperadores(INITIAL_OPERADORES);
     setTabulador(INITIAL_TABULADOR);
+    setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    
+    INITIAL_MULTIPLICADORES.forEach(item => saveItemToFirestore('multiplicadores', item, activeConfig));
+    INITIAL_CELULAS.forEach(item => saveItemToFirestore('celulas', item, activeConfig));
+    INITIAL_SALAS.forEach(item => saveItemToFirestore('salas', item, activeConfig));
+    INITIAL_DEMANDAS.forEach(item => saveItemToFirestore('demandas', item, activeConfig));
+    INITIAL_TURMAS.forEach(item => saveItemToFirestore('turmas', item, activeConfig));
+    INITIAL_OPERADORES.forEach(item => saveItemToFirestore('operadores', item, activeConfig));
+    INITIAL_TABULADOR.forEach(item => saveItemToFirestore('tabulador', item, activeConfig));
+    INITIAL_FREQUENCIAS_NOTAS.forEach(item => saveItemToFirestore('frequencias_notas', item, activeConfig));
+
     persistAndNotify({
       multiplicadores: INITIAL_MULTIPLICADORES,
       celulas: INITIAL_CELULAS,
@@ -841,11 +1644,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       demandas: INITIAL_DEMANDAS,
       turmas: INITIAL_TURMAS,
       operadores: INITIAL_OPERADORES,
-      tabulador: INITIAL_TABULADOR
+      tabulador: INITIAL_TABULADOR,
+      frequenciasNotas: INITIAL_FREQUENCIAS_NOTAS
     });
   };
 
   const clearAllData = () => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    multiplicadores.forEach(m => deleteItemFromFirestore('multiplicadores', m.id, activeConfig));
+    celulas.forEach(c => deleteItemFromFirestore('celulas', c.id, activeConfig));
+    salas.forEach(s => deleteItemFromFirestore('salas', s.id, activeConfig));
+    demandas.forEach(d => deleteItemFromFirestore('demandas', d.id, activeConfig));
+    turmas.forEach(t => deleteItemFromFirestore('turmas', t.id, activeConfig));
+    operadores.forEach(o => deleteItemFromFirestore('operadores', o.id, activeConfig));
+    tabulador.forEach(t => deleteItemFromFirestore('tabulador', t.id, activeConfig));
+    frequenciasNotas.forEach(fn => deleteItemFromFirestore('frequencias_notas', fn.id, activeConfig));
+
     setMultiplicadores([]);
     setCelulas([]);
     setSalas([]);
@@ -853,6 +1667,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTurmas([]);
     setOperadores([]);
     setTabulador([]);
+    setFrequenciasNotas([]);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     persistAndNotify({
       multiplicadores: [],
@@ -861,7 +1676,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       demandas: [],
       turmas: [],
       operadores: [],
-      tabulador: []
+      tabulador: [],
+      frequenciasNotas: []
     });
   };
 
@@ -875,6 +1691,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         turmas,
         operadores,
         tabulador,
+        frequenciasNotas,
         selectedDate,
         setSelectedDate,
         activeTab,
@@ -887,6 +1704,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveStatus,
         isSaving,
         lastSyncTime,
+        pendingSyncQueue,
+        isItemPendingSync,
+        hasPendingSync,
+        pendingSyncCount,
+        retrySync,
         forceSaveToCloud,
         forceReloadFromCloud,
         securityPassword,
@@ -914,8 +1736,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getOperadorByLogin,
         addAlinhamentoTabulador,
         updateAlinhamentoTabulador,
+        atomicUpdateTabuladorOperadores,
         deleteAlinhamentoTabulador,
         toggleAlinhamentoStatus,
+        addFrequenciaNota,
+        updateFrequenciaNota,
+        atomicUpdateFrequenciaNotaAlunos,
+        deleteFrequenciaNota,
         checkRoomConflict,
         checkTrainerConflict,
         resetToInitialData,
