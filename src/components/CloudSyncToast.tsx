@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 export const CloudSyncToast: React.FC = () => {
   const { saveStatus, lastSyncTime, isFirebaseConnected, hasPendingSync, pendingSyncCount, retrySync } = useApp();
 
-  if (saveStatus === 'idle' && !isFirebaseConnected && !hasPendingSync) {
+  if (saveStatus === 'idle' && !hasPendingSync) {
     return null;
   }
 

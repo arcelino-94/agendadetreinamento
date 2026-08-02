@@ -226,6 +226,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
+  const statusTimeoutRef = useRef<any>(null);
+
+  const updateSaveStatus = useCallback((status: 'idle' | 'saving' | 'saved' | 'error', durationMs = 2500) => {
+    if (statusTimeoutRef.current) {
+      clearTimeout(statusTimeoutRef.current);
+      statusTimeoutRef.current = null;
+    }
+    setSaveStatus(status);
+    if (status === 'saved' || status === 'error') {
+      statusTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle');
+      }, durationMs);
+    }
+  }, []);
+
   const isSaving = saveStatus === 'saving';
 
   // Pending Sync Queue State & Deleted IDs Persistence
@@ -312,20 +327,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const attemptSaveItem = useCallback(async (collectionName: string, item: { id: string }) => {
     if (!item || !item.id) return false;
     const activeConfig = firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG;
-    setSaveStatus('saving');
+    updateSaveStatus('saving');
     const success = await saveItemToFirestore(collectionName, item, activeConfig);
     if (success) {
       removePendingSync(item.id);
-      setSaveStatus('saved');
       setLastSyncTime(new Date().toLocaleTimeString());
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      updateSaveStatus('saved', 2500);
       return true;
     } else {
       addPendingSync(collectionName, item);
-      setSaveStatus('error');
+      updateSaveStatus('error', 3000);
       return false;
     }
-  }, [addPendingSync, removePendingSync]);
+  }, [addPendingSync, removePendingSync, updateSaveStatus]);
 
   // Retry all pending items in background
   const retrySync = useCallback(async () => {
@@ -334,7 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (keys.length === 0) return;
 
     const activeConfig = firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG;
-    setSaveStatus('saving');
+    updateSaveStatus('saving');
     let anyFailed = false;
 
     for (const id of keys) {
@@ -350,13 +364,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (!anyFailed) {
-      setSaveStatus('saved');
       setLastSyncTime(new Date().toLocaleTimeString());
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      updateSaveStatus('saved', 2500);
     } else {
-      setSaveStatus('error');
+      updateSaveStatus('error', 3000);
     }
-  }, [removePendingSync]);
+  }, [removePendingSync, updateSaveStatus]);
 
   // Periodic Retry Loop
   useEffect(() => {
@@ -495,13 +508,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bc.postMessage({ type: 'DATA_UPDATED', data });
         bc.close();
       }
-      setSaveStatus('saved');
+      updateSaveStatus('saved', 2500);
       setLastSyncTime(new Date().toLocaleTimeString());
-      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       console.error('Erro ao salvar localmente:', err);
     }
-  }, []);
+  }, [updateSaveStatus]);
 
   // Listener Firestore em Tempo Real por Coleção Independente (Smart Merge - Zero Data Loss)
   useEffect(() => {
@@ -635,7 +647,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, activeConfig);
 
-    setSaveStatus('saved');
+    updateSaveStatus('saved', 2500);
     setLastSyncTime(new Date().toLocaleTimeString());
 
     return () => {
@@ -648,7 +660,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (unsubTabulador) unsubTabulador();
       if (unsubFreq) unsubFreq();
     };
-  }, [isFirebaseConnected, firebaseConfig, attemptSaveItem]);
+  }, [isFirebaseConnected, firebaseConfig, attemptSaveItem, updateSaveStatus]);
 
   const setFirebaseConfig = (config: FirebaseConfigCustom | null) => {
     setFirebaseConfigState(config);
@@ -674,22 +686,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tabulador,
       frequenciasNotas
     };
-    setSaveStatus('saving');
+    updateSaveStatus('saving');
     const success = await saveStateToFirestore(currentState, activeConfig);
     if (success) {
-      setSaveStatus('saved');
       setLastSyncTime(new Date().toLocaleTimeString());
-      setTimeout(() => setSaveStatus('idle'), 2500);
+      updateSaveStatus('saved', 2500);
     } else {
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      updateSaveStatus('error', 3000);
     }
     return success;
-  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig]);
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig, updateSaveStatus]);
 
   // Forçar Carregamento Manual da Nuvem (Sobrescrever local)
   const forceReloadFromCloud = useCallback(async (): Promise<boolean> => {
-    setSaveStatus('saving');
+    updateSaveStatus('saving');
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     const cloudData = await loadStateFromFirestore(activeConfig);
     if (cloudData) {
@@ -717,16 +727,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Erro ao atualizar localStorage:', e);
       }
 
-      setSaveStatus('saved');
       setLastSyncTime(new Date().toLocaleTimeString());
-      setTimeout(() => setSaveStatus('idle'), 2500);
+      updateSaveStatus('saved', 2500);
       return true;
     } else {
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      updateSaveStatus('error', 3000);
       return false;
     }
-  }, [firebaseConfig]);
+  }, [firebaseConfig, updateSaveStatus]);
 
   // Validação de Conflito de Sala
   const checkRoomConflict = (
