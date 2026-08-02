@@ -50,28 +50,26 @@ export function getFirestoreInstance(config?: FirebaseConfigCustom): Firestore |
   return firestoreDb;
 }
 
-function sanitizeUndefined(obj: any): any {
-  if (obj === undefined) {
-    return null;
+function sanitizeForFirestore(value: any): any {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value)) return value.map(sanitizeForFirestore);
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    const clean: Record<string, any> = {};
+    Object.keys(value).forEach((key) => {
+      if (value[key] !== undefined) clean[key] = sanitizeForFirestore(value[key]);
+    });
+    return clean;
   }
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(item => item === undefined ? null : sanitizeUndefined(item));
-  }
-  const cleanObj: Record<string, any> = {};
-  for (const key of Object.keys(obj)) {
-    const value = obj[key];
-    cleanObj[key] = value === undefined ? null : sanitizeUndefined(value);
-  }
-  return cleanObj;
+  return value;
 }
 
 export async function saveStateToFirestore(data: any, config?: FirebaseConfigCustom): Promise<boolean> {
   try {
     const db = getFirestoreInstance(config);
     if (!db) return false;
+    const sanitizedData = sanitizeForFirestore(data);
+    const docRef = doc(db, 'treinamentos_td', 'main_state');
+    await setDoc(docRef, { ...sanitizedData, lastUpdated: new Date().toISOString() }, { merge: true });
     const mapping: Record<string, string> = {
       multiplicadores: 'multiplicadores',
       celulas: 'celulas',
@@ -168,7 +166,7 @@ export async function saveItemToFirestore<T extends { id: string }>(
     const db = getFirestoreInstance(config);
     if (!db || !item || !item.id) return false;
     const docRef = doc(db, collectionName, String(item.id));
-    const sanitized = sanitizeUndefined(item);
+    const sanitized = sanitizeForFirestore(item);
     await setDoc(docRef, sanitized, { merge: true });
     return true;
   } catch (err) {
@@ -286,8 +284,8 @@ export async function addArrayItemsToFirestoreDoc(
     const db = getFirestoreInstance(config);
     if (!db || !docId || !newItems || newItems.length === 0) return false;
     const docRef = doc(db, collectionName, String(docId));
-    const sanitizedItems = sanitizeUndefined(newItems);
-    const sanitizedExtra = extraFieldsToUpdate ? sanitizeUndefined(extraFieldsToUpdate) : {};
+    const sanitizedItems = sanitizeForFirestore(newItems);
+    const sanitizedExtra = extraFieldsToUpdate ? sanitizeForFirestore(extraFieldsToUpdate) : {};
 
     await updateDoc(docRef, {
       [arrayFieldName]: arrayUnion(...sanitizedItems),
@@ -313,9 +311,9 @@ export async function updateArrayItemInFirestoreDoc(
     const db = getFirestoreInstance(config);
     if (!db || !docId) return false;
     const docRef = doc(db, collectionName, String(docId));
-    const sanitizedOld = oldItem ? sanitizeUndefined(oldItem) : null;
-    const sanitizedNew = newItem ? sanitizeUndefined(newItem) : null;
-    const sanitizedExtra = extraFieldsToUpdate ? sanitizeUndefined(extraFieldsToUpdate) : {};
+    const sanitizedOld = oldItem ? sanitizeForFirestore(oldItem) : null;
+    const sanitizedNew = newItem ? sanitizeForFirestore(newItem) : null;
+    const sanitizedExtra = extraFieldsToUpdate ? sanitizeForFirestore(extraFieldsToUpdate) : {};
 
     if (sanitizedOld) {
       await updateDoc(docRef, {
@@ -353,12 +351,12 @@ export async function atomicUpdateArrayInFirestoreDoc(
     const docRef = doc(db, collectionName, String(docId));
 
     const sanitizedOld = oldItemsToRemove && oldItemsToRemove.length > 0
-      ? sanitizeUndefined(oldItemsToRemove)
+      ? sanitizeForFirestore(oldItemsToRemove)
       : [];
     const sanitizedNew = newItemsToAdd && newItemsToAdd.length > 0
-      ? sanitizeUndefined(newItemsToAdd)
+      ? sanitizeForFirestore(newItemsToAdd)
       : [];
-    const sanitizedExtra = extraFieldsToUpdate ? sanitizeUndefined(extraFieldsToUpdate) : {};
+    const sanitizedExtra = extraFieldsToUpdate ? sanitizeForFirestore(extraFieldsToUpdate) : {};
 
     if (sanitizedOld.length > 0) {
       await updateDoc(docRef, {

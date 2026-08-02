@@ -101,7 +101,6 @@ export function AppContent() {
         <main className="flex-1 min-w-0">
           {activeTab === 'dashboard' && (
             <DashboardView 
-              onNavigate={setActiveTab}
               onOpenNovaDemanda={handleOpenNovaDemanda}
               onOpenNovaTurma={() => handleOpenNovaTurma()}
             />

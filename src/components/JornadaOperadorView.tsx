@@ -186,36 +186,22 @@ export const JornadaOperadorView: React.FC = () => {
     if (frequenciasNotas && Array.isArray(frequenciasNotas)) {
       frequenciasNotas.forEach(freq => {
         if (freq.alunos && Array.isArray(freq.alunos)) {
-          const matchOp = freq.alunos.find((o: any) => o.loginBB && o.loginBB.toUpperCase() === targetLogin);
+          const matchOp = freq.alunos.find(o => o.loginBB && o.loginBB.toUpperCase() === targetLogin);
           if (matchOp) {
-            const freqPercent = matchOp.frequenciaPercent ?? 0;
-            const notaFinal = matchOp.notaFinal ?? 0;
-
-            let statusPres = 'Presente';
-            if (matchOp.statusAprovacao === 'Aprovado') {
-              statusPres = 'Presente';
-            } else if (matchOp.statusAprovacao === 'Reprovado') {
-              statusPres = 'Reprovado';
-            } else if (matchOp.statusAprovacao === 'Em Andamento') {
-              statusPres = freqPercent >= 75 ? 'Presente' : 'Pendente';
-            } else {
-              statusPres = freqPercent >= 75 ? 'Presente' : 'Abaixo da Frequência';
-            }
-
             events.push({
               id: `freq-${freq.id}-${matchOp.loginBB}`,
               data: freq.dataInicio || new Date().toISOString().split('T')[0],
-              horario: '08:00',
+              horario: 'N/A',
               treinamento: freq.treinamento || 'Treinamento de Turma',
               solicitante: 'T&D/BB',
-              celula: matchOp.celula || (freq.celulas && freq.celulas[0]) || 'GERAL',
+              celula: matchOp.celula || freq.celulas[0] || 'GERAL',
               multiplicador: freq.multiplicador || 'T&D',
               local: 'Sala de Treinamento',
-              statusPresenca: statusPres,
+              statusPresenca: matchOp.statusAprovacao === 'Reprovado' ? 'Abaixo da Frequência' : (matchOp.frequenciaPercent >= 75 ? 'Presente' : 'Abaixo da Frequência'),
               cargaHoraria: freq.cargaHoraria || '04:00:00',
-              tipo: freq.tipo === 'Novatos' ? 'Novatos' : freq.tipo === 'Reciclagem' ? 'Reciclagem' : freq.tipo === 'Sinergia' ? 'Sinergia' : freq.tipo === 'Migração' ? 'Migração' : 'Outro',
-              frequencia: freqPercent,
-              nota: notaFinal
+              tipo: freq.tipo === 'Novatos' ? 'Novatos' : freq.tipo === 'Sinergia' ? 'Sinergia' : 'Outro',
+              frequencia: matchOp.frequenciaPercent,
+              nota: matchOp.notaFinal
             });
           }
         }

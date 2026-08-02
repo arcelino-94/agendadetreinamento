@@ -779,7 +779,7 @@ export const TabuladorView: React.FC = () => {
             multiplicador: bulkMultiplicador || 'Sem Multiplicador',
             local: bulkLocal,
             statusPresenca: bulkStatus,
-            tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : null
+            tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : ''
           };
           updatedOpsPairs.push({ oldOp: existingOp, newOp: updatedOp });
           newOps[index] = updatedOp;
@@ -799,7 +799,7 @@ export const TabuladorView: React.FC = () => {
           multiplicador: bulkMultiplicador || 'Sem Multiplicador',
           local: bulkLocal,
           statusPresenca: bulkStatus,
-          tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : null
+          tipoAusencia: bulkStatus !== 'Presente' ? bulkTipoAusencia : ''
         };
         newlyAddedItems.push(newOpEntry);
         newOps.push(newOpEntry);

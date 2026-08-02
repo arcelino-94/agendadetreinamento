@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, CheckCircle, XCircle, Users, Building2, Calendar, Clock, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Turma } from '../types';
+import { PasswordConfirmModal } from './PasswordConfirmModal';
 
 interface TurmaDetalhesModalProps {
   turma: Turma | null;
@@ -15,6 +16,7 @@ export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
   onEditTurma
 }) => {
   const { updateTurma, deleteTurma } = useApp();
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   if (!turma) return null;
 
@@ -29,10 +31,7 @@ export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
   };
 
   const handleExcluir = () => {
-    if (confirm(`Remover a turma ${turma.nomeTurma}?`)) {
-      deleteTurma(turma.id);
-      onClose();
-    }
+    setIsConfirmingDelete(true);
   };
 
   return (
@@ -154,6 +153,17 @@ export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
         </div>
 
       </div>
+
+      <PasswordConfirmModal
+        isOpen={isConfirmingDelete}
+        onClose={() => setIsConfirmingDelete(false)}
+        onConfirm={() => {
+          deleteTurma(turma.id);
+          onClose();
+        }}
+        title="Confirmar Exclusão de Turma"
+        itemDescription={`a turma "${turma.nomeTurma}"`}
+      />
     </div>
   );
 };

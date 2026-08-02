@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Demanda, Prioridade, StatusDemanda, TipoDemanda } from '../types';
+import { PasswordConfirmModal } from './PasswordConfirmModal';
 
 interface DemandasViewProps {
   onOpenNovaDemanda: () => void;
@@ -37,6 +38,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
 
   const [selectedDemandaModal, setSelectedDemandaModal] = useState<Demanda | null>(null);
+  const [deletingDemandaId, setDeletingDemandaId] = useState<string | null>(null);
 
   // Filtragem de demandas
   const filteredDemandas = demandas.filter(d => {
@@ -282,11 +284,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                         </button>
 
                         <button
-                          onClick={() => {
-                            if (confirm(`Excluir a solicitação ${d.id}?`)) {
-                              deleteDemanda(d.id);
-                            }
-                          }}
+                          onClick={() => setDeletingDemandaId(d.id)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
                           title="Excluir demanda"
                         >
@@ -444,6 +442,16 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
           </div>
         </div>
       )}
+
+      <PasswordConfirmModal
+        isOpen={deletingDemandaId !== null}
+        onClose={() => setDeletingDemandaId(null)}
+        onConfirm={() => {
+          if (deletingDemandaId) deleteDemanda(deletingDemandaId);
+        }}
+        title="Confirmar Exclusão de Demanda"
+        itemDescription="esta solicitação de demanda"
+      />
 
     </div>
   );

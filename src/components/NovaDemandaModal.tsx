@@ -94,7 +94,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setListaOperadoresText('');
       setObservacoes('');
     }
-  }, [initialDemanda, celulas, multiplicadores, isOpen]);
+  }, [initialDemanda, isOpen]);
 
   if (!isOpen) return null;
 

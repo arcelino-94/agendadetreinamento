@@ -94,7 +94,7 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
       if (activeMults.length > 0) setMultiplicadorId(activeMults[0].id);
       if (salas.length > 0) setSalaId(salas[0].id);
     }
-  }, [initialPreset, selectedDate, multiplicadores, salas]);
+  }, [initialPreset, selectedDate]);
 
   // Efeito para Checagem de Conflito em Tempo Real
   useEffect(() => {

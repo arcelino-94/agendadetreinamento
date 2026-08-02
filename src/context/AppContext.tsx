@@ -478,6 +478,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTurmas(INITIAL_TURMAS);
       setOperadores(INITIAL_OPERADORES);
       setTabulador(INITIAL_TABULADOR);
+      setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
     }
   }, []);
 
@@ -1046,10 +1047,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetTurma && targetTurma.demandaIds.length > 0) {
       nextDemandas = demandas.map(d => {
         if (targetTurma.demandaIds.includes(d.id)) {
-          const reverted = {
-            ...d,
-            status: 'Novo' as const,
-            turmaAgendadaId: null
+          const { turmaAgendadaId, ...demandaSemTurma } = d;
+          const reverted: Demanda = {
+            ...demandaSemTurma,
+            status: 'Novo' as const
           };
           updatedDemandas.push(reverted);
           return reverted;
