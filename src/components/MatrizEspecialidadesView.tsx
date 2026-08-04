@@ -114,8 +114,16 @@ export const MatrizEspecialidadesView: React.FC = () => {
       {/* Grid das Células */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {filteredCelulas.map((c) => {
-          // Quantidade de operadores no Quadro vinculados a esta célula
-          const opsNaCelula = operadores.filter(o => o.segmento.toLowerCase() === c.nome.toLowerCase()).length;
+          // Quantidade de operadores no Quadro vinculados a esta célula (com normalização de acentos e espaços)
+          const normalizeStr = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
+          const normCell = normalizeStr(c.nome);
+          const opsNaCelula = operadores.filter(o => {
+            const normSeg = normalizeStr(o.segmento);
+            if (!normSeg) return false;
+            return normSeg === normCell || normCell.includes(normSeg) || normSeg.includes(normCell);
+          }).length;
+
+          const totalOpsDisplay = operadores.length > 0 ? opsNaCelula : c.operadoresAtivos;
 
           return (
             <div
@@ -160,7 +168,7 @@ export const MatrizEspecialidadesView: React.FC = () => {
                   <span>Cadastrados no Quadro:</span>
                 </span>
                 <strong className="text-slate-900 dark:text-white font-mono font-bold">
-                  {opsNaCelula > 0 ? opsNaCelula : c.operadoresAtivos} ops
+                  {totalOpsDisplay} ops
                 </strong>
               </div>
             </div>

@@ -10,7 +10,9 @@ import {
   OperadorAlinhamento,
   AlinhamentoTabulador,
   ItemFrequenciaNota,
-  AlunoFrequenciaNota
+  AlunoFrequenciaNota,
+  AuditLog,
+  UserSession
 } from '../types';
 import { 
   INITIAL_MULTIPLICADORES, 
@@ -20,7 +22,8 @@ import {
   INITIAL_TURMAS,
   INITIAL_OPERADORES,
   INITIAL_TABULADOR,
-  INITIAL_FREQUENCIAS_NOTAS
+  INITIAL_FREQUENCIAS_NOTAS,
+  INITIAL_AUDIT_LOGS
 } from '../data/mockData';
 import { isOverlapping } from '../lib/planningEngine';
 import { 
@@ -76,6 +79,14 @@ interface AppContextType {
   setSecurityPassword: (pass: string) => void;
   validatePassword: (pass: string) => boolean;
 
+  // Authentication & Session
+  currentUser: UserSession | null;
+  isLoggedIn: boolean;
+  loginAsGerente: (password: string) => { success: boolean; error?: string };
+  loginAsMultiplicador: (login: string, password: string) => { success: boolean; error?: string };
+  logout: () => void;
+  updateMultiplicadorPassword: (multiplicadorId: string, newSenha: string) => void;
+
   // Actions - Demandas
   addDemanda: (demanda: Omit<Demanda, 'id' | 'dataCriacao'>) => Demanda;
   updateDemanda: (id: string, updates: Partial<Demanda>) => void;
@@ -130,6 +141,12 @@ interface AppContextType {
     extraUpdates?: Partial<ItemFrequenciaNota>
   ) => void;
   deleteFrequenciaNota: (id: string) => void;
+
+  // Quadro & Audit Logs
+  quadroLastUpdated: string;
+  auditLogs: AuditLog[];
+  addAuditLog: (acao: 'Inclusão' | 'Alteração' | 'Exclusão', modulo: string, descricao: string, usuario?: string) => void;
+  clearAuditLogs: () => void;
 
   // Validation
   checkRoomConflict: (salaId: string, data: string, horarioInicio: string, horarioFim: string, excludeTurmaId?: string) => Turma | null;
@@ -313,6 +330,195 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     removePendingSync(id);
   }, [removePendingSync]);
+
+  // Quadro Last Updated State
+  const [quadroLastUpdated, setQuadroLastUpdated] = useState<string>(() => {
+    return localStorage.getItem('td_quadro_last_updated') || new Date().toLocaleString('pt-BR');
+  });
+
+  const updateQuadroTimestamp = useCallback(() => {
+    const nowStr = new Date().toLocaleString('pt-BR');
+    setQuadroLastUpdated(nowStr);
+    try {
+      localStorage.setItem('td_quadro_last_updated', nowStr);
+    } catch (e) {
+      console.warn("Erro ao salvar timestamp do quadro:", e);
+    }
+  }, []);
+
+  // User Session State & Auth
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('td_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+    if (currentUser) {
+      try {
+        localStorage.setItem('td_user_session', JSON.stringify(currentUser));
+      } catch (e) {
+        console.warn("Erro ao salvar td_user_session no localStorage:", e);
+      }
+    } else {
+      localStorage.removeItem('td_user_session');
+    }
+  }, [currentUser]);
+
+  const isLoggedIn = currentUser !== null;
+
+  const getFormattedUserName = useCallback((overrideUser?: string) => {
+    if (overrideUser && overrideUser !== 'Coordenador / Multiplicador') {
+      return overrideUser;
+    }
+    const current = currentUserRef.current;
+    if (!current) return 'Gerente';
+    if (current.role === 'gerente') return 'Gerente';
+
+    const nome = current.nome || '';
+    const parts = nome.trim().split(/\s+/);
+    if (parts.length <= 1) return nome || 'Multiplicador';
+    return `${parts[0]} ${parts[parts.length - 1]}`;
+  }, []);
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('td_audit_logs');
+      return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
+    } catch {
+      return INITIAL_AUDIT_LOGS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('td_audit_logs', JSON.stringify(auditLogs));
+    } catch (e) {
+      console.warn("Erro ao salvar audit_logs no localStorage:", e);
+    }
+  }, [auditLogs]);
+
+  const addAuditLog = useCallback((
+    acao: 'Inclusão' | 'Alteração' | 'Exclusão',
+    modulo: string,
+    descricao: string,
+    usuario?: string
+  ) => {
+    const finalUsuario = getFormattedUserName(usuario);
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toLocaleString('pt-BR'),
+      usuario: finalUsuario,
+      acao,
+      modulo,
+      descricao
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+    saveItemToFirestore('audit_logs', newLog, firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG);
+  }, [getFormattedUserName]);
+
+  const loginAsGerente = useCallback((password: string) => {
+    if (password === securityPassword) {
+      const session: UserSession = { role: 'gerente', nome: 'Gerente' };
+      setCurrentUser(session);
+      addAuditLog('Alteração', 'Autenticação', 'Acesso autorizado via Senha Master (Gerente)', 'Gerente');
+      return { success: true };
+    } else {
+      return { success: false, error: 'Senha Master incorreta.' };
+    }
+  }, [securityPassword, addAuditLog]);
+
+  const loginAsMultiplicador = useCallback((loginInput: string, passInput: string) => {
+    const trimmedLogin = (loginInput || '').trim();
+    const normLogin = trimmedLogin.toLowerCase();
+    const isMasterPass = passInput.trim() === securityPassword;
+
+    // Se o login estiver vazio ou for "gerente", e a senha for a master, entra como Gerente
+    if ((!trimmedLogin || normLogin === 'gerente') && isMasterPass) {
+      const session: UserSession = { role: 'gerente', nome: 'Gerente' };
+      setCurrentUser(session);
+      addAuditLog('Alteração', 'Autenticação', 'Acesso autorizado como Gerente (Senha Master)', 'Gerente');
+      return { success: true };
+    }
+
+    // Tenta encontrar o multiplicador pelo login, e-mail ou nome
+    if (trimmedLogin) {
+      const found = multiplicadores.find(m => {
+        const normEmail = (m.email || '').toLowerCase();
+        const normNome = (m.nome || '').toLowerCase();
+        const normId = (m.id || '').toLowerCase();
+        return normEmail === normLogin || normNome === normLogin || normId === normLogin || normEmail.startsWith(normLogin) || normNome.includes(normLogin);
+      });
+
+      if (found) {
+        const expectedPass = found.senha || '123456';
+        if (passInput === expectedPass) {
+          const isMaster = !!found.acessoMaster;
+          const session: UserSession = {
+            role: isMaster ? 'gerente' : 'multiplicador',
+            multiplicadorId: found.id,
+            nome: found.nome,
+            login: found.email,
+            acessoMaster: isMaster
+          };
+          setCurrentUser(session);
+
+          const parts = found.nome.trim().split(/\s+/);
+          const shortName = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : found.nome;
+
+          addAuditLog('Alteração', 'Autenticação', `Login realizado pelo multiplicador (${found.nome})${isMaster ? ' [Acesso Master]' : ''}`, shortName);
+          return { success: true };
+        }
+      }
+    }
+
+    // Se a senha for a master (123456), mesmo que tenha um login diferente, permite acesso Gerente
+    if (isMasterPass) {
+      const session: UserSession = { role: 'gerente', nome: 'Gerente' };
+      setCurrentUser(session);
+      addAuditLog('Alteração', 'Autenticação', 'Acesso autorizado como Gerente via Senha Master', 'Gerente');
+      return { success: true };
+    }
+
+    return { success: false, error: 'Login ou senha incorretos.' };
+  }, [multiplicadores, securityPassword, addAuditLog]);
+
+  const logout = useCallback(() => {
+    const current = currentUserRef.current;
+    if (current) {
+      const parts = (current.nome || '').trim().split(/\s+/);
+      const shortName = current.role === 'gerente' ? 'Gerente' : (parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : current.nome);
+      addAuditLog('Alteração', 'Autenticação', 'Usuário encerrou a sessão no sistema', shortName);
+    }
+    setCurrentUser(null);
+  }, [addAuditLog]);
+
+  const updateMultiplicadorPassword = useCallback((multiplicadorId: string, newSenha: string) => {
+    if (currentUserRef.current?.role !== 'gerente') {
+      alert('Apenas o GERENTE tem permissão para cadastrar ou alterar senhas!');
+      return;
+    }
+
+    const target = multiplicadores.find(m => m.id === multiplicadorId);
+    if (!target) return;
+
+    const updatedTarget = { ...target, senha: newSenha };
+    const nextMults = multiplicadores.map(m => m.id === multiplicadorId ? updatedTarget : m);
+    setMultiplicadores(nextMults);
+
+    saveItemToFirestore('multiplicadores', updatedTarget, firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG);
+    addAuditLog('Alteração', 'Multiplicadores', `Cadastrou/Alterou a senha do multiplicador "${target.nome}"`, 'Gerente');
+  }, [multiplicadores, addAuditLog]);
+
+  const clearAuditLogs = useCallback(() => {
+    setAuditLogs([]);
+  }, []);
 
   const isItemPendingSync = useCallback((id: string) => {
     if (!id) return false;
@@ -539,9 +745,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubMults = subscribeToCollection<Multiplicador>('multiplicadores', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setMultiplicadores(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.multiplicadores) {
         seeded.multiplicadores = true;
@@ -553,9 +760,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubCelulas = subscribeToCollection<CelulaAtendimento>('celulas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setCelulas(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.celulas) {
         seeded.celulas = true;
@@ -567,9 +775,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubSalas = subscribeToCollection<SalaTreinamento>('salas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setSalas(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.salas) {
         seeded.salas = true;
@@ -581,9 +790,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubDemandas = subscribeToCollection<Demanda>('demandas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setDemandas(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.demandas) {
         seeded.demandas = true;
@@ -595,9 +805,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubTurmas = subscribeToCollection<Turma>('turmas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setTurmas(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.turmas) {
         seeded.turmas = true;
@@ -609,9 +820,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubOperadores = subscribeToCollection<OperadorQuadro>('operadores', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setOperadores(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.operadores) {
         seeded.operadores = true;
@@ -623,9 +835,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubTabulador = subscribeToCollection<AlinhamentoTabulador>('tabulador', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setTabulador(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.tabulador) {
         seeded.tabulador = true;
@@ -637,9 +850,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubFreq = subscribeToCollection<ItemFrequenciaNota>('frequencias_notas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         setFrequenciasNotas(prev => {
-          const cloudMap = new Map(cloudItems.map(item => [item.id, item]));
+          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
           const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...cloudItems, ...retainedLocal];
+          return [...filteredCloud, ...retainedLocal];
         });
       } else if (!seeded.frequenciasNotas) {
         seeded.frequenciasNotas = true;
@@ -873,6 +1087,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveItemToFirestore('demandas', newDemanda, activeConfig);
     saveItemToFirestore('tabulador', newTabuladorItem, activeConfig);
 
+    addAuditLog('Inclusão', 'Fila de Reciclagens', `Nova solicitação criada: "${newDemanda.tema}" (${newDemanda.id})`);
+
     persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador, frequenciasNotas: nextFreqList });
     return newDemanda;
   };
@@ -916,6 +1132,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteDemanda = (id: string) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
+    markItemDeleted(`TAB-${id}`);
+    
+    const targetDemanda = demandas.find(d => d.id === id);
     const nextDemandas = demandas.filter(d => d.id !== id);
     const nextTabulador = tabulador.filter(t => t.id !== `TAB-${id}`);
 
@@ -925,7 +1145,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteItemFromFirestore('demandas', id, activeConfig);
     deleteItemFromFirestore('tabulador', `TAB-${id}`, activeConfig);
 
-    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador });
+    addAuditLog('Exclusão', 'Fila de Reciclagens', `Excluiu a solicitação de demanda "${targetDemanda?.tema || id}" (${id})`);
+
+    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador, frequenciasNotas });
   };
 
   // --- Ações de Turmas ---
@@ -1723,6 +1945,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         securityPassword,
         setSecurityPassword,
         validatePassword,
+        currentUser,
+        isLoggedIn,
+        loginAsGerente,
+        loginAsMultiplicador,
+        logout,
+        updateMultiplicadorPassword,
         addDemanda,
         updateDemanda,
         deleteDemanda,
@@ -1752,6 +1980,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFrequenciaNota,
         atomicUpdateFrequenciaNotaAlunos,
         deleteFrequenciaNota,
+        quadroLastUpdated,
+        auditLogs,
+        addAuditLog,
+        clearAuditLogs,
         checkRoomConflict,
         checkTrainerConflict,
         resetToInitialData,

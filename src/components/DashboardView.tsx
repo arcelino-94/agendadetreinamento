@@ -220,7 +220,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenNovaDemanda,
                     <div className="text-[10px] text-slate-500 flex items-center space-x-2">
                       <span>Células: <strong>{ag.celulas.join(', ')}</strong></span>
                       <span>•</span>
-                      <span>Instrutores: <strong>{ag.multiplicadoresAptos.map(m => m.nome.split(' ')[0]).join(', ')}</strong></span>
+                      <span>Instrutores: <strong>
+                        {ag.multiplicadoresAptos.length > 0 
+                          ? ag.multiplicadoresAptos.map(m => m.nome.split(' ')[0]).join(', ') 
+                          : 'Não há multiplicador para essa célula'}
+                      </strong></span>
                     </div>
                   </div>
 

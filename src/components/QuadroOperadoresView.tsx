@@ -6,13 +6,14 @@ import {
   FilterX,
   Search,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Clock
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OperadorQuadro } from '../types';
 
 export const QuadroOperadoresView: React.FC = () => {
-  const { operadores, bulkSetOperadores, celulas } = useApp();
+  const { operadores, bulkSetOperadores, celulas, quadroLastUpdated } = useApp();
 
   // Excel-style Column Filters State
   const [filters, setFilters] = useState({
@@ -126,6 +127,10 @@ export const QuadroOperadoresView: React.FC = () => {
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Base oficial da operação. Atualize via cola/arquivo a qualquer momento para zerar e carregar a base vigente.
+            </p>
+            <p className="text-xs text-indigo-700 dark:text-indigo-300 font-semibold mt-1 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Última atualização do Quadro: <strong>{quadroLastUpdated}</strong></span>
             </p>
           </div>
         </div>

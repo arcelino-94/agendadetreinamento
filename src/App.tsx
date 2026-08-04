@@ -22,6 +22,7 @@ import { ReservarSalaModal } from './components/ReservarSalaModal';
 import { TurmaDetalhesModal } from './components/TurmaDetalhesModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
 import { CloudSyncToast } from './components/CloudSyncToast';
+import { LoginModal } from './components/LoginModal';
 
 import { Demanda, Turma } from './types';
 
@@ -200,6 +201,9 @@ export function AppContent() {
 
       {/* Floating Cloud Sync Toast */}
       <CloudSyncToast />
+
+      {/* Modal de Login / Autenticação de Acesso */}
+      <LoginModal />
 
     </div>
   );

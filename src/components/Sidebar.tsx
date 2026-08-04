@@ -68,7 +68,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'demandas',
-      label: 'Fila de Demandas',
+      label: 'Fila de Reciclagens',
       icon: FileText,
       badge: pendingCount > 0 ? (
         <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold px-1.5 py-0.2 rounded text-[10px]">

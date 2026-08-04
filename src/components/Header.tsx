@@ -12,7 +12,10 @@ import {
   Building2,
   CloudCheck,
   Loader2,
-  Cloud
+  Cloud,
+  LogOut,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getDeadlineAlerts } from '../lib/planningEngine';
@@ -40,11 +43,20 @@ export const Header: React.FC<HeaderProps> = ({
     lastSyncTime,
     forceSaveToCloud,
     demandas,
-    setActiveTab
+    setActiveTab,
+    currentUser,
+    logout
   } = useApp();
 
   const [showAlerts, setShowAlerts] = useState(false);
   const deadlineAlerts = getDeadlineAlerts(demandas);
+
+  const getShortName = (fullName: string) => {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    return `${parts[0]} ${parts[parts.length - 1]}`;
+  };
 
   return (
     <header className="bg-gradient-to-r from-purple-800 via-indigo-900 to-blue-900 text-white border-b border-indigo-700/50 sticky top-0 z-30 transition-colors shadow-md">
@@ -206,6 +218,34 @@ export const Header: React.FC<HeaderProps> = ({
               <Building2 className="w-3.5 h-3.5" />
               <span>Reservar Sala</span>
             </button>
+
+            {/* User Session Badge & Logout */}
+            {currentUser && (
+              <div className="flex items-center space-x-1.5 pl-1 border-l border-white/20">
+                <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs ${
+                  currentUser.role === 'gerente'
+                    ? 'bg-amber-500/20 border-amber-400/40 text-amber-200'
+                    : 'bg-indigo-500/20 border-indigo-400/40 text-indigo-100'
+                }`}>
+                  {currentUser.role === 'gerente' ? (
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                  ) : (
+                    <UserCheck className="w-3.5 h-3.5 text-indigo-300" />
+                  )}
+                  <span className="truncate max-w-[120px] sm:max-w-[160px]">
+                    {currentUser.nome === 'Gerente' ? 'Gerente (Master)' : `${getShortName(currentUser.nome)}${currentUser.acessoMaster ? ' (Master)' : ''}`}
+                  </span>
+                </div>
+
+                <button
+                  onClick={logout}
+                  className="p-1.5 text-rose-200 hover:text-white hover:bg-rose-500/30 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+                  title="Sair / Trocar de Usuário"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
           </div>
         </div>

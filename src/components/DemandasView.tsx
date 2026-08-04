@@ -124,15 +124,6 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                 <LayoutGrid className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            {/* Botão Cadastrar Demanda */}
-            <button
-              onClick={onOpenNovaDemanda}
-              className="flex-1 sm:flex-initial px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Nova Solicitação</span>
-            </button>
           </div>
 
         </div>

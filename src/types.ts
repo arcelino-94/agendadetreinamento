@@ -12,6 +12,8 @@ export interface Multiplicador {
   id: string;
   nome: string;
   email: string;
+  senha?: string;
+  acessoMaster?: boolean;
   foto?: string;
   horarioInicio: string; // e.g. "08:00"
   horarioFim: string; // e.g. "17:00"
@@ -20,6 +22,14 @@ export interface Multiplicador {
   status: StatusMultiplicador;
   telefone?: string;
   observacoes?: string;
+}
+
+export interface UserSession {
+  role: 'gerente' | 'multiplicador';
+  multiplicadorId?: string;
+  nome: string;
+  login?: string;
+  acessoMaster?: boolean;
 }
 
 export interface CelulaAtendimento {
@@ -186,6 +196,15 @@ export interface ItemFrequenciaNota {
   alunos: AlunoFrequenciaNota[];
   status: 'Em Andamento' | 'Concluído';
   criadoEm: string;
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  usuario: string;
+  acao: 'Inclusão' | 'Alteração' | 'Exclusão';
+  modulo: string;
+  descricao: string;
 }
 
 export interface FirebaseConfigCustom {

@@ -242,14 +242,15 @@ export const FrequenciasNotasView: React.FC = () => {
     setEditingAlunos(prev => prev.map(a => {
       if (a.id === alunoId) {
         const currentDiario = a.presencaDiaria || {};
-        const currentItem = currentDiario[dateKey] || { frequencia: 'P', horaExtra: '', obs: '' };
+        const currentItem = currentDiario[dateKey] || { frequencia: '', horaExtra: '', obs: '' };
         const updatedItem = { ...currentItem, [field]: value };
         const updatedDiario = { ...currentDiario, [dateKey]: updatedItem };
 
-        // Recalculate frequency % based on 'P' vs total entries
+        // Recalculate frequency % based on 'P' vs total recorded entries
         const entries = Object.values(updatedDiario) as PresencaDiariaItem[];
-        const totalDays = entries.length;
-        const presentDays = entries.filter(e => e.frequencia === 'P').length;
+        const filledEntries = entries.filter(e => e.frequencia && e.frequencia !== '');
+        const totalDays = filledEntries.length;
+        const presentDays = filledEntries.filter(e => e.frequencia === 'P').length;
         const newFreqPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : a.frequenciaPercent;
 
         let status = a.statusAprovacao;
@@ -279,7 +280,7 @@ export const FrequenciasNotasView: React.FC = () => {
       case 'FERIADO': return 'bg-purple-600 text-white font-black';
       case 'A': return 'bg-blue-600 text-white font-black';
       case 'TO': return 'bg-orange-600 text-white font-black';
-      default: return 'bg-emerald-600 text-white font-black';
+      default: return 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold border border-slate-300 dark:border-slate-700';
     }
   };
 
@@ -697,6 +698,7 @@ export const FrequenciasNotasView: React.FC = () => {
                     <th className="p-1.5 border-r border-slate-700 w-32">MATRÍCULA DP</th>
                     <th className="p-1.5 border-r border-slate-700 w-32">LOGIN BB</th>
                     <th className="p-1.5 border-r border-slate-700 min-w-[200px]">NOME OPERADOR</th>
+                    <th className="p-1.5 border-r border-slate-700 min-w-[150px]">OBSERVAÇÃO</th>
                     <th className="p-1.5 text-center border-r border-slate-700 w-28">FREQUÊNCIA (%)</th>
                     <th className="p-1.5 text-center border-r border-slate-700 w-36">MÉDIA DAS NOTAS (0-10)</th>
                     <th className="p-1.5 text-center border-r border-slate-700 w-28">STATUS APROVAÇÃO</th>
@@ -767,6 +769,17 @@ export const FrequenciasNotasView: React.FC = () => {
                                 {aluno.nome}
                               </span>
                             )}
+                          </td>
+
+                          {/* OBSERVAÇÃO */}
+                          <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                            <input
+                              type="text"
+                              value={aluno.observacoes || ''}
+                              onChange={(e) => handleUpdateStudent(aluno.id, 'observacoes', e.target.value)}
+                              placeholder="Observação..."
+                              className="w-full px-2 py-0.5 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 rounded bg-transparent text-slate-800 dark:text-slate-200 text-[11px] font-medium outline-none"
+                            />
                           </td>
 
                           {/* FREQUÊNCIA (%) */}
@@ -861,7 +874,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         {/* 4 EXPANDABLE DAILY PRESENCE ROWS FOR THIS OPERATOR */}
                         {isPresencaGridOpen && (
                           <tr className="bg-indigo-50/20 dark:bg-slate-900/40">
-                            <td colSpan={7} className="p-2.5 border-b border-indigo-100 dark:border-slate-800">
+                            <td colSpan={8} className="p-2.5 border-b border-indigo-100 dark:border-slate-800">
                               <div className="bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 p-2.5 shadow-2xs space-y-2">
                                 <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700">
                                   <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
@@ -890,8 +903,8 @@ export const FrequenciasNotasView: React.FC = () => {
                                       FREQUÊNCIA
                                     </div>
                                     {visibleDates.map(d => {
-                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: 'P', horaExtra: '', obs: '' };
-                                      const status = currentItem.frequencia || 'P';
+                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
+                                      const status = currentItem.frequencia || '';
                                       return (
                                         <select
                                           key={`freq-${d.fullDate}`}
@@ -899,6 +912,7 @@ export const FrequenciasNotasView: React.FC = () => {
                                           onChange={(e) => handleUpdateDailyRecord(aluno.id, d.fullDate, 'frequencia', e.target.value)}
                                           className={`w-full py-1 text-center font-black rounded border-0 text-[10px] cursor-pointer focus:outline-none ${getStatusStyle(status)}`}
                                         >
+                                          <option value="" className="bg-white text-slate-400 font-bold">- (Em branco)</option>
                                           <option value="P" className="bg-white text-slate-900 font-bold">P (Presente)</option>
                                           <option value="FI" className="bg-white text-rose-700 font-bold">FI (Falta Inj.)</option>
                                           <option value="FJ" className="bg-white text-amber-700 font-bold">FJ (Falta Just.)</option>
@@ -917,7 +931,7 @@ export const FrequenciasNotasView: React.FC = () => {
                                       HORA EXTRA
                                     </div>
                                     {visibleDates.map(d => {
-                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: 'P', horaExtra: '', obs: '' };
+                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
                                       return (
                                         <input
                                           key={`he-${d.fullDate}`}
@@ -935,7 +949,7 @@ export const FrequenciasNotasView: React.FC = () => {
                                       OBS
                                     </div>
                                     {visibleDates.map(d => {
-                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: 'P', horaExtra: '', obs: '' };
+                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
                                       return (
                                         <input
                                           key={`obs-${d.fullDate}`}

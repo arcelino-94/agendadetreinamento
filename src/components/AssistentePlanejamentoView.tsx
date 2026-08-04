@@ -197,8 +197,10 @@ export const AssistentePlanejamentoView: React.FC<AssistentePlanejamentoViewProp
 
                   <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg">
                     <span className="text-slate-400 font-semibold block mb-0.5 text-[10px] uppercase">Multiplicadores Aptos:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">
-                      {group.multiplicadoresAptos.map(m => m.nome).join(', ')}
+                    <p className={`font-bold ${group.multiplicadoresAptos.length > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {group.multiplicadoresAptos.length > 0 
+                        ? group.multiplicadoresAptos.map(m => m.nome).join(', ') 
+                        : 'Não há multiplicador para essa célula'}
                     </p>
                   </div>
 

@@ -7,14 +7,19 @@ import {
   Edit3, 
   Trash2, 
   Award,
-  ChevronDown
+  ChevronDown,
+  Lock,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  KeyRound
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Multiplicador, StatusMultiplicador } from '../types';
 import { PasswordConfirmModal } from './PasswordConfirmModal';
 
 export const MultiplicadoresView: React.FC = () => {
-  const { multiplicadores, celulas, addMultiplicador, updateMultiplicador, deleteMultiplicador } = useApp();
+  const { multiplicadores, celulas, addMultiplicador, updateMultiplicador, deleteMultiplicador, currentUser } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
@@ -26,11 +31,15 @@ export const MultiplicadoresView: React.FC = () => {
 
   // Form State
   const [nome, setNome] = useState('');
+  const [email, setEmail] = useState('');
   const [foto, setFoto] = useState('');
   const [horarioInicio, setHorarioInicio] = useState('08:00');
   const [horarioFim, setHorarioFim] = useState('17:00');
   const [selectedEspecialidades, setSelectedEspecialidades] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusMultiplicador>('Ativo');
+  const [senha, setSenha] = useState('123456');
+  const [acessoMaster, setAcessoMaster] = useState(false);
+  const [showSenha, setShowSenha] = useState(false);
   const [isCelulasDropdownOpen, setIsCelulasDropdownOpen] = useState(false);
 
   const filtered = multiplicadores.filter(m => {
@@ -58,22 +67,29 @@ export const MultiplicadoresView: React.FC = () => {
 
   const handleOpenModal = (m?: Multiplicador) => {
     setIsCelulasDropdownOpen(false);
+    setShowSenha(false);
     if (m) {
       setEditingMult(m);
       setNome(m.nome);
+      setEmail(m.email || '');
       setFoto(m.foto || '');
       setHorarioInicio(m.horarioInicio);
       setHorarioFim(m.horarioFim);
       setSelectedEspecialidades(m.especialidades || []);
       setStatus(m.status === 'Disponível' ? 'Ativo' : m.status);
+      setSenha(m.senha || '123456');
+      setAcessoMaster(!!m.acessoMaster);
     } else {
       setEditingMult(null);
       setNome('');
+      setEmail('');
       setFoto('');
       setHorarioInicio('08:00');
       setHorarioFim('17:00');
       setSelectedEspecialidades([]);
       setStatus('Ativo');
+      setSenha('123456');
+      setAcessoMaster(false);
     }
     setIsModalOpen(true);
   };
@@ -92,26 +108,31 @@ export const MultiplicadoresView: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const especialidades = selectedEspecialidades;
+    const finalEmail = email.trim() || `${nome.toLowerCase().replace(/\s+/g, '.')}@empresa.com`;
 
     if (editingMult) {
       updateMultiplicador(editingMult.id, {
         nome,
+        email: finalEmail,
         foto,
         horarioInicio,
         horarioFim,
         especialidades,
-        status
+        status,
+        ...(currentUser?.role === 'gerente' ? { senha, acessoMaster } : {})
       });
     } else {
       addMultiplicador({
         nome,
-        email: `${nome.toLowerCase().replace(/\s+/g, '.')}@empresa.com`,
+        email: finalEmail,
         foto: foto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         horarioInicio,
         horarioFim,
         especialidades,
         diasFolga: ['Sábado', 'Domingo'],
-        status
+        status,
+        senha: senha || '123456',
+        acessoMaster
       });
     }
 
@@ -194,12 +215,23 @@ export const MultiplicadoresView: React.FC = () => {
                     <h3 className="text-xs font-bold text-slate-900 dark:text-white truncate">
                       {m.nome}
                     </h3>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                      {m.email}
+                    </p>
                   </div>
                 </div>
 
-                <span className={`px-2 py-0.5 rounded text-[10px] shrink-0 ${getStatusBadge(m.status)}`}>
-                  {m.status === 'Disponível' ? 'Ativo' : m.status}
-                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {m.acessoMaster && currentUser?.role === 'gerente' && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1 shadow-2xs">
+                      <ShieldCheck className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      Master
+                    </span>
+                  )}
+                  <span className={`px-2 py-0.5 rounded text-[10px] ${getStatusBadge(m.status)}`}>
+                    {m.status === 'Disponível' ? 'Ativo' : m.status}
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
@@ -227,11 +259,7 @@ export const MultiplicadoresView: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-400 text-[10px]">
-                Folga: Sáb / Dom
-              </span>
-
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end text-xs">
               <div className="space-x-1">
                 <button
                   onClick={() => handleOpenModal(m)}
@@ -273,7 +301,8 @@ export const MultiplicadoresView: React.FC = () => {
                   required
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white focus:outline-hidden"
+                  placeholder="ex: Bruna Santos"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white focus:outline-hidden text-xs"
                 />
               </div>
 
@@ -416,6 +445,81 @@ export const MultiplicadoresView: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Login:</label>
+                <input
+                  type="text"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder=""
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                />
+              </div>
+
+              {/* CAMPO DE SENHA DO MULTIPLICADOR */}
+              {currentUser?.role === 'gerente' ? (
+                <div className="p-3 bg-indigo-50/70 dark:bg-slate-800/80 border border-indigo-200 dark:border-slate-700 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-900 dark:text-slate-100 font-bold text-xs flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Cadastrar / Alterar Senha de Acesso:</span>
+                    </label>
+                    <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Gerente Master
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showSenha ? 'text' : 'password'}
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      placeholder="Defina a senha de acesso..."
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-3 pr-10 py-1.5 font-bold text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSenha(!showSenha)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      {showSenha ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    * Apenas o Gerente pode visualizar, cadastrar e alterar a senha de todos os multiplicadores.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] text-slate-600 dark:text-slate-400 flex items-start gap-2">
+                  <Lock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block">Senha de Acesso Protegida</span>
+                    <span>Apenas o <strong>GERENTE</strong> tem permissão para cadastrar, alterar e visualizar as senhas dos multiplicadores.</span>
+                  </div>
+                </div>
+              )}
+
+              {/* CAMPO LIBERAR ACESSO MASTER (APENAS PARA O GERENTE) */}
+              {currentUser?.role === 'gerente' && (
+                <div className="p-3 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-xl space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={acessoMaster}
+                      onChange={(e) => setAcessoMaster(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      Liberar Acesso Master
+                    </span>
+                  </label>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 pl-6">
+                    Ao marcar esta opção, o multiplicador terá acesso completo às funções de Gerente ao logar com sua própria senha, e os registros de auditoria continuarão salvos em seu nome.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Status Atual:</label>

@@ -67,8 +67,8 @@ export function detectSmartGroupings(
       // Verifica se a especialidade do multiplicador coincide com a Célula do pedido ou Tema do treinamento
       const matchesTemaOuCelula = m.especialidades.some(esp => {
         const normEsp = normalizeText(esp);
+        if (!normEsp || normEsp === 'geral') return false;
         const normTema = normalizeText(temaOriginal);
-        const isGeral = normEsp === 'geral';
         
         const cellMatch = celulasUnicas.some(cel => {
           const normCel = normalizeText(cel);
@@ -77,14 +77,14 @@ export function detectSmartGroupings(
 
         const temaMatch = normEsp.includes(normTema) || normTema.includes(normEsp);
 
-        return isGeral || cellMatch || temaMatch;
+        return cellMatch || temaMatch;
       });
 
       return matchesTemaOuCelula;
     });
 
-    // Se nenhum filtro restritivo bater, considera todos os ativos como aptos para que a operação escolha
-    const listaFinalMultiplicadores = multiplicadoresAptos.length > 0 ? multiplicadoresAptos : multiplicadoresAtivos;
+    // Se não houver multiplicador apto, a lista final fica vazia para indicar "Não há multiplicador para essa célula"
+    const listaFinalMultiplicadores = multiplicadoresAptos;
 
     // Encontrar salas com capacidade adequada
     const salasAptas = salas.filter(s => s.capacidade >= totalOperadores && s.status !== 'Manutenção');
@@ -127,17 +127,16 @@ export function generateSmartSlots(
   const multiplicadoresAtivos = multiplicadores.filter(m => m.status !== 'Ausente' && m.status !== 'Férias');
 
   pendentes.forEach(demanda => {
-    // 1. Encontrar TODOS os multiplicadores aptos para a Célula/Tema da demanda (independente do horário de trabalho)
-    const aptos = multiplicadoresAtivos.filter(m => {
+    // 1. Encontrar TODOS os multiplicadores aptos para a Célula/Tema da demanda
+    const candidadosMult = multiplicadoresAtivos.filter(m => {
       return m.especialidades.some(esp => {
         const normEsp = normalizeText(esp);
+        if (!normEsp || normEsp === 'geral') return false;
         const normTema = normalizeText(demanda.tema);
         const normCel = normalizeText(demanda.celulaNome);
-        return normEsp === 'geral' || normEsp.includes(normCel) || normCel.includes(normEsp) || normEsp.includes(normTema) || normTema.includes(normEsp);
+        return normEsp.includes(normCel) || normCel.includes(normEsp) || normEsp.includes(normTema) || normTema.includes(normEsp);
       });
     });
-
-    const candidadosMult = aptos.length > 0 ? aptos : multiplicadoresAtivos;
 
     // 2. Encontrar sala com capacidade suficiente
     const salaApta = salas.find(s => s.capacidade >= demanda.qtdOperadores && s.status !== 'Manutenção') || salas[0];
