@@ -15,8 +15,10 @@ export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
   onClose,
   onEditTurma
 }) => {
-  const { updateTurma, deleteTurma } = useApp();
+  const { updateTurma, deleteTurma, currentUser } = useApp();
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
+  const isMaster = currentUser?.role === 'gerente' || !!currentUser?.acessoMaster;
 
   if (!turma) return null;
 
@@ -107,49 +109,57 @@ export const TurmaDetalhesModal: React.FC<TurmaDetalhesModalProps> = ({
         </div>
 
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleExcluir}
-              className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Excluir</span>
-            </button>
+          {!isMaster ? (
+            <div className="w-full p-3 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-900 dark:text-amber-200 text-xs font-medium">
+               Procure o gestor/gerente com Acesso Master para editar ou excluir agendamentos já lançados.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleExcluir}
+                  className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir</span>
+                </button>
 
-            {onEditTurma && (
-              <button
-                onClick={() => {
-                  const target = turma;
-                  onClose();
-                  onEditTurma(target);
-                }}
-                className="px-3 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 dark:text-amber-300 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1"
-              >
-                <span>Editar Dados</span>
-              </button>
-            )}
-          </div>
+                {onEditTurma && (
+                  <button
+                    onClick={() => {
+                      const target = turma;
+                      onClose();
+                      onEditTurma(target);
+                    }}
+                    className="px-3 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 dark:text-amber-300 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1 cursor-pointer"
+                  >
+                    <span>Editar Dados</span>
+                  </button>
+                )}
+              </div>
 
-          <div className="flex items-center space-x-2">
-            {turma.status !== 'Finalizado' && (
-              <button
-                onClick={handleConcluir}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Marcar Concluído</span>
-              </button>
-            )}
+              <div className="flex items-center space-x-2">
+                {turma.status !== 'Finalizado' && (
+                  <button
+                    onClick={handleConcluir}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1 cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Marcar Concluído</span>
+                  </button>
+                )}
 
-            {turma.status !== 'Cancelado' && (
-              <button
-                onClick={handleCancelar}
-                className="px-3.5 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl text-xs font-bold transition-all"
-              >
-                Cancelar Turma
-              </button>
-            )}
-          </div>
+                {turma.status !== 'Cancelado' && (
+                  <button
+                    onClick={handleCancelar}
+                    className="px-3.5 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Cancelar Turma
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
       </div>

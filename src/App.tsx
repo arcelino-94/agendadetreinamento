@@ -139,7 +139,10 @@ export function AppContent() {
           )}
 
           {activeTab === 'salas' && (
-            <SalasView />
+            <SalasView 
+              onSelectSlotToSchedule={handleSelectSlotToSchedule}
+              onSelectTurmaDetail={(turma) => setSelectedTurmaDetail(turma)}
+            />
           )}
 
           {activeTab === 'tabulador' && (

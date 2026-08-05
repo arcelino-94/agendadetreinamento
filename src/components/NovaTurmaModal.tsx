@@ -44,8 +44,16 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
     updateTurma,
     selectedDate, 
     checkRoomConflict, 
-    checkTrainerConflict 
+    checkTrainerConflict,
+    currentUser
   } = useApp();
+
+  const isMaster = currentUser?.role === 'gerente' || !!currentUser?.acessoMaster;
+  const myMultiplicador = multiplicadores.find(m => 
+    m.id === currentUser?.multiplicadorId || 
+    m.nome.toLowerCase() === currentUser?.nome?.toLowerCase() ||
+    (currentUser?.login && m.nome.toLowerCase().includes(currentUser.login.toLowerCase()))
+  );
 
   const [editingTurmaId, setEditingTurmaId] = useState<string | null>(null);
   const [nomeTurma, setNomeTurma] = useState('');
@@ -263,20 +271,27 @@ export const NovaTurmaModal: React.FC<NovaTurmaModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                Multiplicador (Instrutor):
+                Multiplicador (Instrutor): {!isMaster && <span className="text-amber-600 font-bold text-[10px] ml-1">(🔒 Seu Perfil)</span>}
               </label>
               <select
                 value={multiplicadorId}
                 onChange={(e) => setMultiplicadorId(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
+                disabled={!isMaster}
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden disabled:opacity-80 disabled:bg-slate-100"
               >
-                {multiplicadores
-                  .filter(m => m.status !== 'Ausente' || m.id === multiplicadorId)
-                  .map(m => (
-                    <option key={m.id} value={m.id}>
-                      {formatShortName(m.nome)}
-                    </option>
-                  ))}
+                {!isMaster ? (
+                  <option value={myMultiplicador?.id || multiplicadorId}>
+                    {myMultiplicador?.nome || currentUser?.nome}
+                  </option>
+                ) : (
+                  multiplicadores
+                    .filter(m => m.status !== 'Ausente' || m.id === multiplicadorId)
+                    .map(m => (
+                      <option key={m.id} value={m.id}>
+                        {formatShortName(m.nome)}
+                      </option>
+                    ))
+                )}
               </select>
             </div>
 
