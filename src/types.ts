@@ -89,6 +89,8 @@ export interface Turma {
   salaId: string;
   salaNome: string;
   data: string; // YYYY-MM-DD
+  dataInicio?: string; // YYYY-MM-DD
+  dataFim?: string; // YYYY-MM-DD
   horarioInicio: string; // e.g. "09:00"
   horarioFim: string; // e.g. "12:00"
   qtdParticipantes: number;

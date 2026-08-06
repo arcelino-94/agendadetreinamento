@@ -705,7 +705,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setSecurityPassword = (pass: string) => {
     setSecurityPasswordState(pass);
-    localStorage.setItem('td_callcenter_sec_pass', pass);
+    try {
+      localStorage.setItem('td_callcenter_sec_pass', pass);
+    } catch (e) {}
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    saveItemToFirestore('quadro_meta', { id: 'sec_pass', pass }, activeConfig);
   };
 
   const validatePassword = (pass: string): boolean => {
@@ -756,6 +760,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       operadores: false,
       tabulador: false,
       frequenciasNotas: false,
+      rastreabilidades: false
     };
 
     const mergeCloudWithLocal = <T extends { id: string }>(
@@ -845,13 +850,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, activeConfig);
 
-    const unsubQuadroMeta = subscribeToCollection<{ id: string; timestamp: string }>('quadro_meta', (cloudItems) => {
+    const unsubQuadroMeta = subscribeToCollection<{ id: string; timestamp?: string; pass?: string }>('quadro_meta', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
         const metaDoc = cloudItems.find(item => item.id === 'last_updated');
         if (metaDoc && metaDoc.timestamp) {
           setQuadroLastUpdated(metaDoc.timestamp);
           try {
             localStorage.setItem('td_quadro_last_updated', metaDoc.timestamp);
+          } catch (e) {}
+        }
+        const secDoc = cloudItems.find(item => item.id === 'sec_pass');
+        if (secDoc && secDoc.pass) {
+          setSecurityPasswordState(secDoc.pass);
+          try {
+            localStorage.setItem('td_callcenter_sec_pass', secDoc.pass);
           } catch (e) {}
         }
       }
@@ -881,6 +893,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, activeConfig);
 
+    const unsubRastreabilidades = subscribeToCollection<CronogramaRastreabilidade>('rastreabilidades', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        setRastreabilidades(prev => mergeCloudWithLocal(cloudItems, prev));
+      } else if (!seeded.rastreabilidades) {
+        seeded.rastreabilidades = true;
+        INITIAL_RASTREABILIDADES.forEach(item => attemptSaveItem('rastreabilidades', item));
+        setRastreabilidades(INITIAL_RASTREABILIDADES);
+      } else {
+        setRastreabilidades(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
+      }
+    }, activeConfig);
+
+    const unsubAuditLogs = subscribeToCollection<AuditLog>('audit_logs', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        const sorted = [...cloudItems].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+        setAuditLogs(sorted);
+      }
+    }, activeConfig);
+
     updateSaveStatus('saved', 2500);
     setLastSyncTime(new Date().toLocaleTimeString());
 
@@ -894,6 +925,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (unsubQuadroMeta) unsubQuadroMeta();
       if (unsubTabulador) unsubTabulador();
       if (unsubFreq) unsubFreq();
+      if (unsubRastreabilidades) unsubRastreabilidades();
+      if (unsubAuditLogs) unsubAuditLogs();
     };
   }, [isFirebaseConnected, firebaseConfig, attemptSaveItem, updateSaveStatus]);
 
@@ -919,7 +952,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       turmas,
       operadores,
       tabulador,
-      frequenciasNotas
+      frequenciasNotas,
+      rastreabilidades,
+      auditLogs
     };
     updateSaveStatus('saving');
     const success = await saveStateToFirestore(currentState, activeConfig);
@@ -930,7 +965,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateSaveStatus('error', 3000);
     }
     return success;
-  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig, updateSaveStatus]);
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades, auditLogs, firebaseConfig, updateSaveStatus]);
 
   // Forçar Carregamento Manual da Nuvem (Sobrescrever local)
   const forceReloadFromCloud = useCallback(async (): Promise<boolean> => {
@@ -946,6 +981,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(cloudData.operadores)) setOperadores(cloudData.operadores);
       if (Array.isArray(cloudData.tabulador)) setTabulador(cloudData.tabulador);
       if (Array.isArray(cloudData.frequenciasNotas)) setFrequenciasNotas(cloudData.frequenciasNotas);
+      if (Array.isArray(cloudData.rastreabilidades)) setRastreabilidades(cloudData.rastreabilidades);
+      if (Array.isArray(cloudData.auditLogs)) setAuditLogs(cloudData.auditLogs);
 
       try {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
@@ -2103,6 +2140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOperadores(INITIAL_OPERADORES);
     setTabulador(INITIAL_TABULADOR);
     setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
+    setRastreabilidades(INITIAL_RASTREABILIDADES);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     
     INITIAL_MULTIPLICADORES.forEach(item => saveItemToFirestore('multiplicadores', item, activeConfig));
@@ -2113,6 +2151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     INITIAL_OPERADORES.forEach(item => saveItemToFirestore('operadores', item, activeConfig));
     INITIAL_TABULADOR.forEach(item => saveItemToFirestore('tabulador', item, activeConfig));
     INITIAL_FREQUENCIAS_NOTAS.forEach(item => saveItemToFirestore('frequencias_notas', item, activeConfig));
+    INITIAL_RASTREABILIDADES.forEach(item => saveItemToFirestore('rastreabilidades', item, activeConfig));
 
     persistAndNotify({
       multiplicadores: INITIAL_MULTIPLICADORES,
@@ -2122,7 +2161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       turmas: INITIAL_TURMAS,
       operadores: INITIAL_OPERADORES,
       tabulador: INITIAL_TABULADOR,
-      frequenciasNotas: INITIAL_FREQUENCIAS_NOTAS
+      frequenciasNotas: INITIAL_FREQUENCIAS_NOTAS,
+      rastreabilidades: INITIAL_RASTREABILIDADES
     });
   };
 
@@ -2136,6 +2176,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     operadores.forEach(o => deleteItemFromFirestore('operadores', o.id, activeConfig));
     tabulador.forEach(t => deleteItemFromFirestore('tabulador', t.id, activeConfig));
     frequenciasNotas.forEach(fn => deleteItemFromFirestore('frequencias_notas', fn.id, activeConfig));
+    rastreabilidades.forEach(r => deleteItemFromFirestore('rastreabilidades', r.id, activeConfig));
 
     setMultiplicadores([]);
     setCelulas([]);
@@ -2145,6 +2186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOperadores([]);
     setTabulador([]);
     setFrequenciasNotas([]);
+    setRastreabilidades([]);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     persistAndNotify({
       multiplicadores: [],
@@ -2154,7 +2196,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       turmas: [],
       operadores: [],
       tabulador: [],
-      frequenciasNotas: []
+      frequenciasNotas: [],
+      rastreabilidades: []
     });
   };
 

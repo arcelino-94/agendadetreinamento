@@ -94,7 +94,8 @@ export const FrequenciasNotasView: React.FC = () => {
     treinamento: '',
     tipo: 'Sinergia' as 'Sinergia' | 'Migração' | 'Novatos' | 'Retorno LMG',
     multiplicador: '',
-    horarioTreinamento: '',
+    horarioInicio: '14:00',
+    horarioFim: '20:20',
     salaId: '',
     salaNome: '',
     dataInicio: '',
@@ -369,11 +370,17 @@ export const FrequenciasNotasView: React.FC = () => {
   const handleOpenEditCourseMetadata = (course: ItemFrequenciaNota) => {
     setEditingCourseMetadata(course);
     const opsText = course.alunos.map(a => `${a.matDP || ''}\t${a.loginBB || ''}\t${a.nome}`).join('\n');
+    const rawHor = course.horarioTreinamento || '14:00 às 20:20';
+    const times = rawHor.match(/\d{1,2}:\d{2}/g);
+    const hInicio = (times && times[0]) ? times[0].padStart(5, '0') : '14:00';
+    const hFim = (times && times[1]) ? times[1].padStart(5, '0') : '20:20';
+
     setEditCourseForm({
       treinamento: course.treinamento,
       tipo: course.tipo,
       multiplicador: course.multiplicador,
-      horarioTreinamento: course.horarioTreinamento || '14:00 às 20:20',
+      horarioInicio: hInicio,
+      horarioFim: hFim,
       salaId: course.salaId || '',
       salaNome: course.salaNome || '',
       dataInicio: course.dataInicio || '',
@@ -441,12 +448,15 @@ export const FrequenciasNotasView: React.FC = () => {
 
     const selectedSala = salas.find(s => s.id === editCourseForm.salaId);
     const finalSalaNome = editCourseForm.salaNome || selectedSala?.nome || '';
+    const finalHorario = (editCourseForm.horarioInicio && editCourseForm.horarioFim)
+      ? `${editCourseForm.horarioInicio} às ${editCourseForm.horarioFim}`
+      : (editCourseForm.horarioInicio || editCourseForm.horarioFim || '14:00 às 20:20');
 
     updateFrequenciaNota(editingCourseMetadata.id, {
       treinamento: editCourseForm.treinamento,
       tipo: editCourseForm.tipo,
       multiplicador: editCourseForm.multiplicador,
-      horarioTreinamento: editCourseForm.horarioTreinamento,
+      horarioTreinamento: finalHorario,
       salaId: editCourseForm.salaId || undefined,
       salaNome: finalSalaNome || undefined,
       dataInicio: editCourseForm.dataInicio,
@@ -578,8 +588,8 @@ export const FrequenciasNotasView: React.FC = () => {
           updatedDiario[dateKey] = { ...currentItem, [field]: value };
         }
 
-        const hasTO = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'TO');
-        const hasFinalizado = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'FINALIZADO');
+        const hasTO = (Object.values(updatedDiario) as PresencaDiariaItem[]).some(item => (item.frequencia || '').toUpperCase() === 'TO');
+        const hasFinalizado = (Object.values(updatedDiario) as PresencaDiariaItem[]).some(item => (item.frequencia || '').toUpperCase() === 'FINALIZADO');
 
         // Recalculate frequency % (FI, FJ, TO, FINALIZADO do not count as present; TO & FINALIZADO excluded from active days)
         const entries = (Object.values(updatedDiario) as PresencaDiariaItem[]).filter(e => e.frequencia && e.frequencia !== '');
@@ -659,8 +669,8 @@ export const FrequenciasNotasView: React.FC = () => {
         updatedDiario[dateKey] = { ...currentItem, frequencia: status };
       }
 
-      const hasTO = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'TO');
-      const hasFinalizado = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'FINALIZADO');
+      const hasTO = (Object.values(updatedDiario) as PresencaDiariaItem[]).some(item => (item.frequencia || '').toUpperCase() === 'TO');
+      const hasFinalizado = (Object.values(updatedDiario) as PresencaDiariaItem[]).some(item => (item.frequencia || '').toUpperCase() === 'FINALIZADO');
 
       const entries = (Object.values(updatedDiario) as PresencaDiariaItem[]).filter(e => e.frequencia && e.frequencia !== '');
       const activeEntries = entries.filter(e => (e.frequencia || '').toUpperCase() !== 'FINALIZADO');
@@ -1903,13 +1913,26 @@ export const FrequenciasNotasView: React.FC = () => {
                   <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
                     Horário do Treinamento:
                   </label>
-                  <input
-                    type="text"
-                    value={editCourseForm.horarioTreinamento}
-                    onChange={(e) => setEditCourseForm(prev => ({ ...prev, horarioTreinamento: e.target.value }))}
-                    placeholder="Ex: 14:00 às 20:20"
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
-                  />
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1 flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2">
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">De:</span>
+                      <input
+                        type="time"
+                        value={editCourseForm.horarioInicio}
+                        onChange={(e) => setEditCourseForm(prev => ({ ...prev, horarioInicio: e.target.value }))}
+                        className="w-full bg-transparent font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2">
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">Até:</span>
+                      <input
+                        type="time"
+                        value={editCourseForm.horarioFim}
+                        onChange={(e) => setEditCourseForm(prev => ({ ...prev, horarioFim: e.target.value }))}
+                        className="w-full bg-transparent font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

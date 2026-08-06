@@ -46,7 +46,8 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
   });
   const [selectedMultiplicadorId, setSelectedMultiplicadorId] = useState('');
   const [selectedSalaId, setSelectedSalaId] = useState('');
-  const [horarioTreinamento, setHorarioTreinamento] = useState('14:00 às 20:20');
+  const [horarioInicio, setHorarioInicio] = useState('14:00');
+  const [horarioFim, setHorarioFim] = useState('20:20');
 
   // Checkboxes para formato das colunas do Boletim (Matrícula DP e/ou Nome)
   const [hasMatDP, setHasMatDP] = useState(false);
@@ -80,7 +81,20 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setDataFim(initialDemanda.dataFim || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
       setSelectedMultiplicadorId(initialDemanda.multiplicadorId || '');
       setSelectedSalaId(initialDemanda.salaId || '');
-      setHorarioTreinamento(initialDemanda.horarioTreinamento || '14:00 às 20:20');
+      
+      const rawHor = initialDemanda.horarioTreinamento || '14:00 às 20:20';
+      const times = rawHor.match(/\d{1,2}:\d{2}/g);
+      if (times && times.length >= 2) {
+        setHorarioInicio(times[0].padStart(5, '0'));
+        setHorarioFim(times[1].padStart(5, '0'));
+      } else if (times && times.length === 1) {
+        setHorarioInicio(times[0].padStart(5, '0'));
+        setHorarioFim('20:20');
+      } else {
+        setHorarioInicio('14:00');
+        setHorarioFim('20:20');
+      }
+
       setListaOperadoresText(initialDemanda.listaOperadores ? initialDemanda.listaOperadores.join('\n') : '');
       setObservacoes(initialDemanda.observacoes || '');
     } else {
@@ -100,7 +114,8 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setDataFim(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
       setSelectedMultiplicadorId(multiplicadores.length > 0 ? multiplicadores[0].id : '');
       setSelectedSalaId(salas.length > 0 ? salas[0].id : '');
-      setHorarioTreinamento('14:00 às 20:20');
+      setHorarioInicio('14:00');
+      setHorarioFim('20:20');
       setListaOperadoresText('');
       setObservacoes('');
     }
@@ -164,6 +179,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
 
     const finalTema = isPeriodoType ? (tema || `${tipo} - ${celulaNome}`) : tema;
     const finalPrazo = isPeriodoType ? dataFim : prazoLimite;
+    const finalHorarioStr = (horarioInicio && horarioFim) ? `${horarioInicio} às ${horarioFim}` : (horarioInicio || horarioFim || '14:00 às 20:20');
 
     if (initialDemanda) {
       updateDemanda(initialDemanda.id, {
@@ -182,7 +198,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         dataFim: isPeriodoType ? dataFim : null,
         multiplicadorId: selectedMultiplicadorId,
         multiplicadorNome,
-        horarioTreinamento: isPeriodoType ? horarioTreinamento : null,
+        horarioTreinamento: isPeriodoType ? finalHorarioStr : null,
         salaId: selectedSalaId || null,
         salaNome: salaNome || null,
         qtdOperadores: qtdOperadoresCalculated,
@@ -207,7 +223,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         dataFim: isPeriodoType ? dataFim : null,
         multiplicadorId: selectedMultiplicadorId,
         multiplicadorNome,
-        horarioTreinamento: isPeriodoType ? horarioTreinamento : null,
+        horarioTreinamento: isPeriodoType ? finalHorarioStr : null,
         salaId: selectedSalaId || null,
         salaNome: salaNome || null,
         qtdOperadores: qtdOperadoresCalculated,
@@ -378,13 +394,28 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
                   <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
                     Horário do Treinamento:
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 14:00 às 20:20"
-                    value={horarioTreinamento}
-                    onChange={(e) => setHorarioTreinamento(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
-                  />
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1 flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2">
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">De:</span>
+                      <input
+                        type="time"
+                        required={isPeriodoType}
+                        value={horarioInicio}
+                        onChange={(e) => setHorarioInicio(e.target.value)}
+                        className="w-full bg-transparent font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2">
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">Até:</span>
+                      <input
+                        type="time"
+                        required={isPeriodoType}
+                        value={horarioFim}
+                        onChange={(e) => setHorarioFim(e.target.value)}
+                        className="w-full bg-transparent font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>

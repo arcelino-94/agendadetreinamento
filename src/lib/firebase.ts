@@ -78,7 +78,9 @@ export async function saveStateToFirestore(data: any, config?: FirebaseConfigCus
       turmas: 'turmas',
       operadores: 'operadores',
       tabulador: 'tabulador',
-      frequenciasNotas: 'frequencias_notas'
+      frequenciasNotas: 'frequencias_notas',
+      rastreabilidades: 'rastreabilidades',
+      auditLogs: 'audit_logs'
     };
 
     for (const [key, collName] of Object.entries(mapping)) {
@@ -102,7 +104,7 @@ export async function loadStateFromFirestore(config?: FirebaseConfigCustom): Pro
   try {
     const db = getFirestoreInstance(config);
     if (!db) return null;
-    const collections = ['multiplicadores', 'celulas', 'salas', 'demandas', 'turmas', 'operadores', 'tabulador', 'frequencias_notas'];
+    const collections = ['multiplicadores', 'celulas', 'salas', 'demandas', 'turmas', 'operadores', 'tabulador', 'frequencias_notas', 'rastreabilidades', 'audit_logs'];
     const result: Record<string, any> = {};
 
     for (const collName of collections) {
@@ -112,7 +114,7 @@ export async function loadStateFromFirestore(config?: FirebaseConfigCustom): Pro
       snapshot.forEach(docSnap => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
-      const keyName = collName === 'frequencias_notas' ? 'frequenciasNotas' : collName;
+      const keyName = collName === 'frequencias_notas' ? 'frequenciasNotas' : (collName === 'audit_logs' ? 'auditLogs' : collName);
       result[keyName] = list;
     }
 
@@ -220,7 +222,9 @@ export async function migrateMainStateToCollections(config?: FirebaseConfigCusto
       turmas: 'turmas',
       operadores: 'operadores',
       tabulador: 'tabulador',
-      frequenciasNotas: 'frequencias_notas'
+      frequenciasNotas: 'frequencias_notas',
+      rastreabilidades: 'rastreabilidades',
+      auditLogs: 'audit_logs'
     };
 
     for (const [key, collName] of Object.entries(mapping)) {

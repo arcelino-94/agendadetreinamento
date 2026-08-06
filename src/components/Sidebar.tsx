@@ -270,7 +270,7 @@ export const Sidebar: React.FC = () => {
       )}
 
       {/* DESKTOP SIDEBAR (Visible on md and larger) */}
-      <aside className={`hidden md:block sticky top-3 max-h-[calc(100vh-1.5rem)] overflow-y-auto no-scrollbar transition-all duration-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shrink-0 self-start p-2 shadow-2xs ${
+      <aside className={`hidden md:block sticky top-[3.75rem] max-h-[calc(100vh-4.5rem)] overflow-y-auto no-scrollbar transition-all duration-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shrink-0 self-start p-2 shadow-2xs z-20 ${
         isCollapsed ? 'w-14' : 'w-full lg:w-56'
       }`}>
         {/* Botão de Ocultar/Mostrar Sidebar */}
