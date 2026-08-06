@@ -21,7 +21,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
   onClose,
   initialDemanda
 }) => {
-  const { celulas, multiplicadores, addDemanda, updateDemanda, setActiveTab, operadores } = useApp();
+  const { celulas, multiplicadores, salas, addDemanda, updateDemanda, setActiveTab, operadores } = useApp();
 
   const [tipo, setTipo] = useState<TipoDemanda>('Alinhamento');
   const [origem, setOrigem] = useState('E-mail Operacional');
@@ -45,6 +45,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [selectedMultiplicadorId, setSelectedMultiplicadorId] = useState('');
+  const [selectedSalaId, setSelectedSalaId] = useState('');
   const [horarioTreinamento, setHorarioTreinamento] = useState('14:00 às 20:20');
 
   // Checkboxes para formato das colunas do Boletim (Matrícula DP e/ou Nome)
@@ -78,6 +79,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setDataInicio(initialDemanda.dataInicio || new Date().toISOString().split('T')[0]);
       setDataFim(initialDemanda.dataFim || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
       setSelectedMultiplicadorId(initialDemanda.multiplicadorId || '');
+      setSelectedSalaId(initialDemanda.salaId || '');
       setHorarioTreinamento(initialDemanda.horarioTreinamento || '14:00 às 20:20');
       setListaOperadoresText(initialDemanda.listaOperadores ? initialDemanda.listaOperadores.join('\n') : '');
       setObservacoes(initialDemanda.observacoes || '');
@@ -97,11 +99,12 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setDataInicio(new Date().toISOString().split('T')[0]);
       setDataFim(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
       setSelectedMultiplicadorId(multiplicadores.length > 0 ? multiplicadores[0].id : '');
+      setSelectedSalaId(salas.length > 0 ? salas[0].id : '');
       setHorarioTreinamento('14:00 às 20:20');
       setListaOperadoresText('');
       setObservacoes('');
     }
-  }, [initialDemanda, isOpen]);
+  }, [initialDemanda, isOpen, celulas, multiplicadores, salas]);
 
   if (!isOpen) return null;
 
@@ -156,6 +159,9 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
     const multObj = multiplicadores.find(m => m.id === selectedMultiplicadorId);
     const multiplicadorNome = multObj ? multObj.nome : '';
 
+    const salaObj = salas.find(s => s.id === selectedSalaId);
+    const salaNome = salaObj ? salaObj.nome : '';
+
     const finalTema = isPeriodoType ? (tema || `${tipo} - ${celulaNome}`) : tema;
     const finalPrazo = isPeriodoType ? dataFim : prazoLimite;
 
@@ -177,6 +183,8 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         multiplicadorId: selectedMultiplicadorId,
         multiplicadorNome,
         horarioTreinamento: isPeriodoType ? horarioTreinamento : null,
+        salaId: selectedSalaId || null,
+        salaNome: salaNome || null,
         qtdOperadores: qtdOperadoresCalculated,
         listaOperadores: parsedLogins,
         observacoes
@@ -200,6 +208,8 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         multiplicadorId: selectedMultiplicadorId,
         multiplicadorNome,
         horarioTreinamento: isPeriodoType ? horarioTreinamento : null,
+        salaId: selectedSalaId || null,
+        salaNome: salaNome || null,
         qtdOperadores: qtdOperadoresCalculated,
         listaOperadores: parsedLogins,
         status: 'Novo',
@@ -343,10 +353,10 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                    Multiplicador Condução do Treinamento:
+                    Multiplicador Condução:
                   </label>
                   <select
                     value={selectedMultiplicadorId}
@@ -375,6 +385,24 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
                     onChange={(e) => setHorarioTreinamento(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Sala de Treinamento:
+                  </label>
+                  <select
+                    value={selectedSalaId}
+                    onChange={(e) => setSelectedSalaId(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                  >
+                    <option value="">Selecione a Sala...</option>
+                    {salas.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.nome} ({s.capacidade} lug.)
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

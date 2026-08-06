@@ -344,7 +344,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Quadro Last Updated State
   const [quadroLastUpdated, setQuadroLastUpdated] = useState<string>(() => {
-    return localStorage.getItem('td_quadro_last_updated') || new Date().toLocaleString('pt-BR');
+    return localStorage.getItem('td_quadro_last_updated') || 'Sem registro de atualização';
   });
 
   const updateQuadroTimestamp = useCallback(() => {
@@ -355,6 +355,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.warn("Erro ao salvar timestamp do quadro:", e);
     }
+    const activeConfig = firebaseConfigRef.current || DEFAULT_FIREBASE_CONFIG;
+    saveItemToFirestore('quadro_meta', { id: 'last_updated', timestamp: nowStr }, activeConfig);
   }, []);
 
   // User Session State & Auth
@@ -833,16 +835,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const unsubOperadores = subscribeToCollection<OperadorQuadro>('operadores', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setOperadores(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+        setOperadores(filteredCloud);
       } else if (!seeded.operadores) {
         seeded.operadores = true;
         INITIAL_OPERADORES.forEach(item => attemptSaveItem('operadores', item));
         setOperadores(INITIAL_OPERADORES);
+      }
+    }, activeConfig);
+
+    const unsubQuadroMeta = subscribeToCollection<{ id: string; timestamp: string }>('quadro_meta', (cloudItems) => {
+      if (cloudItems && cloudItems.length > 0) {
+        const metaDoc = cloudItems.find(item => item.id === 'last_updated');
+        if (metaDoc && metaDoc.timestamp) {
+          setQuadroLastUpdated(metaDoc.timestamp);
+          try {
+            localStorage.setItem('td_quadro_last_updated', metaDoc.timestamp);
+          } catch (e) {}
+        }
       }
     }, activeConfig);
 
@@ -886,6 +896,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (unsubDemandas) unsubDemandas();
       if (unsubTurmas) unsubTurmas();
       if (unsubOperadores) unsubOperadores();
+      if (unsubQuadroMeta) unsubQuadroMeta();
       if (unsubTabulador) unsubTabulador();
       if (unsubFreq) unsubFreq();
     };
@@ -1015,8 +1026,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dataCriacao: new Date().toISOString()
     };
 
-    const nextDemandas = [newDemanda, ...demandas];
-
     // Auto create tabulador entry for new demand, pulling data from quadroOperadores
     const parsedLogins = demandaData.listaOperadores || [];
     const ops: OperadorAlinhamento[] = parsedLogins.map(item => {
@@ -1086,11 +1095,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       criadoEm: new Date().toISOString()
     };
 
-    const nextTabulador = [newTabuladorItem, ...tabulador];
+    const isPeriodoType = ['Sinergia', 'Migração', 'Novatos', 'Retorno LMG'].includes(demandaData.tipo);
+
+    let nextDemandas = demandas;
+    let nextTabulador = tabulador;
+
+    // Standard single-session demands (Alinhamento, Reciclagem) go to Recyclings Queue and Tabulador
+    if (!isPeriodoType) {
+      nextDemandas = [newDemanda, ...demandas];
+      nextTabulador = [newTabuladorItem, ...tabulador];
+
+      setDemandas(nextDemandas);
+      setTabulador(nextTabulador);
+
+      saveItemToFirestore('demandas', newDemanda, activeConfig);
+      saveItemToFirestore('tabulador', newTabuladorItem, activeConfig);
+
+      addAuditLog('Inclusão', 'Fila de Reciclagens', `Nova solicitação criada: "${newDemanda.tema}" (${newDemanda.id})`);
+    } else {
+      addAuditLog('Inclusão', 'Frequências e Notas', `Novo treinamento de ${demandaData.tipo} criado: "${demandaData.tema || 'SEM TÍTULO'}"`);
+    }
 
     // If demand is Sinergia, Migração, Novatos or Retorno LMG, create a Frequencias & Notas item automatically
     let nextFreqList = frequenciasNotas;
-    if (['Sinergia', 'Migração', 'Novatos', 'Retorno LMG'].includes(demandaData.tipo)) {
+    if (isPeriodoType) {
       const alunosList: AlunoFrequenciaNota[] = ops.map((op, idx) => ({
         id: `aln-${newId}-${idx}`,
         matDP: op.matDP || 'N/A',
@@ -1107,13 +1135,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newFreqItem: ItemFrequenciaNota = {
         id: `FN-${newId}`,
         demandaId: newId,
-        treinamento: demandaData.tema || 'TREINAMENTO DE FREQUÊNCIA E NOTAS',
+        treinamento: demandaData.tema || `${demandaData.tipo} - ${demandaData.celulaNome || 'GERAL'}`,
         tipo: demandaData.tipo as any,
         celulas: [demandaData.celulaNome || 'GERAL'],
         dataInicio: demandaData.dataInicio || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
         dataFim: demandaData.dataFim || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
         multiplicador: demandaData.multiplicadorNome || 'T&D/BB',
         horarioTreinamento: demandaData.horarioTreinamento || undefined,
+        salaId: demandaData.salaId || undefined,
+        salaNome: demandaData.salaNome || undefined,
         cargaHoraria: '40h',
         alunos: alunosList,
         status: 'Em Andamento',
@@ -1125,15 +1155,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveItemToFirestore('frequencias_notas', newFreqItem, activeConfig);
     }
 
-    setDemandas(nextDemandas);
-    setTabulador(nextTabulador);
+    // Auto schedule Turma for room & multiplicador agenda if room or multiplicador is specified or for Periodo types
+    let nextTurmas = turmas;
+    if (isPeriodoType || demandaData.salaId || demandaData.salaNome) {
+      const selectedSala = salas.find(s => s.id === demandaData.salaId);
+      const sId = demandaData.salaId || selectedSala?.id || (salas.length > 0 ? salas[0].id : 's1');
+      const sNome = demandaData.salaNome || selectedSala?.nome || 'Sala 01';
 
-    saveItemToFirestore('demandas', newDemanda, activeConfig);
-    saveItemToFirestore('tabulador', newTabuladorItem, activeConfig);
+      const newTurma: Turma = {
+        id: `TURMA-${newId}`,
+        nomeTurma: demandaData.tema || `${demandaData.tipo} - ${demandaData.celulaNome || 'GERAL'}`,
+        tema: demandaData.tema || demandaData.tipo,
+        demandaIds: [newId],
+        multiplicadorId: demandaData.multiplicadorId || (multiplicadores.length > 0 ? multiplicadores[0].id : 'm1'),
+        multiplicadorNome: demandaData.multiplicadorNome || (multiplicadores.length > 0 ? multiplicadores[0].nome : 'T&D/BB'),
+        salaId: sId,
+        salaNome: sNome,
+        data: demandaData.dataInicio || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
+        horarioInicio: (demandaData.horarioTreinamento?.split('às')[0]?.trim()) || '14:00',
+        horarioFim: (demandaData.horarioTreinamento?.split('às')[1]?.trim()) || '20:20',
+        qtdParticipantes: demandaData.qtdOperadores || ops.length || 1,
+        celulasNomes: [demandaData.celulaNome || 'GERAL'],
+        status: 'Agendado',
+        tipo: demandaData.tipo
+      };
+      nextTurmas = [newTurma, ...turmas];
+      setTurmas(nextTurmas);
+      saveItemToFirestore('turmas', newTurma, activeConfig);
+    }
 
-    addAuditLog('Inclusão', 'Fila de Reciclagens', `Nova solicitação criada: "${newDemanda.tema}" (${newDemanda.id})`);
-
-    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador, frequenciasNotas: nextFreqList });
+    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas: nextTurmas, operadores, tabulador: nextTabulador, frequenciasNotas: nextFreqList });
     return newDemanda;
   };
 
@@ -1480,6 +1531,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const bulkSetOperadores = (novosOperadores: OperadorQuadro[]) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+
+    // Delete old operator records from Firestore to ensure clean synchronization across devices
+    const newIdSet = new Set(novosOperadores.map(o => o.id));
+    operadores.forEach(oldOp => {
+      if (!newIdSet.has(oldOp.id)) {
+        deleteItemFromFirestore('operadores', oldOp.id, activeConfig);
+        markItemDeleted(oldOp.id);
+      }
+    });
+
     const opMap = new Map<string, OperadorQuadro>();
     novosOperadores.forEach(op => {
       if (op.loginBB) {
@@ -1521,8 +1582,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOperadores(novosOperadores);
     setTabulador(updatedTabulador);
 
+    // Save newly uploaded active operators
     novosOperadores.forEach(op => saveItemToFirestore('operadores', op, activeConfig));
     changedTabItems.forEach(item => saveItemToFirestore('tabulador', item, activeConfig));
+
+    // Update timestamp across cloud & local
+    updateQuadroTimestamp();
 
     persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores: novosOperadores, tabulador: updatedTabulador });
   };

@@ -28,7 +28,9 @@ import {
   Zap,
   Check,
   Layers,
-  Sparkles
+  Sparkles,
+  Pencil,
+  DoorOpen
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ItemFrequenciaNota, AlunoFrequenciaNota, PresencaDiariaItem, ItemProvaNota, DossieOperador } from '../types';
@@ -72,6 +74,7 @@ export const FrequenciasNotasView: React.FC = () => {
     demandas, 
     celulas, 
     multiplicadores, 
+    salas,
     operadores,
     isItemPendingSync,
     setActiveTab
@@ -83,6 +86,23 @@ export const FrequenciasNotasView: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<string>('TODOS');
   const [activeCourse, setActiveCourse] = useState<ItemFrequenciaNota | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
+
+  // Edit course metadata state (Pencil icon on main card)
+  const [editingCourseMetadata, setEditingCourseMetadata] = useState<ItemFrequenciaNota | null>(null);
+  const [editCourseForm, setEditCourseForm] = useState({
+    treinamento: '',
+    tipo: 'Sinergia' as 'Sinergia' | 'Migração' | 'Novatos' | 'Retorno LMG',
+    multiplicador: '',
+    horarioTreinamento: '',
+    salaId: '',
+    salaNome: '',
+    dataInicio: '',
+    dataFim: '',
+    listaOperadoresText: ''
+  });
+
+  // Global editing state for table rows inside Launch modal
+  const [isEditingAllRows, setIsEditingAllRows] = useState(false);
 
   // Modals for individual student details
   const [selectedAlunoCalendar, setSelectedAlunoCalendar] = useState<{ aluno: AlunoFrequenciaNota; course: ItemFrequenciaNota } | null>(null);
@@ -114,9 +134,9 @@ export const FrequenciasNotasView: React.FC = () => {
     nome: ''
   });
 
-  // Filtered items
+  // Filtered items - SORTED FROM MOST RECENT TO OLDEST
   const filteredItems = useMemo(() => {
-    return items.filter(item => {
+    const list = items.filter(item => {
       const q = searchTerm.toLowerCase().trim();
       const matchSearch = item.treinamento.toLowerCase().includes(q) ||
         item.multiplicador.toLowerCase().includes(q) ||
@@ -153,6 +173,13 @@ export const FrequenciasNotasView: React.FC = () => {
       }
 
       return matchSearch && matchTipo && matchMonth && matchYear;
+    });
+
+    // Sort: Most recent to oldest
+    return list.sort((a, b) => {
+      const timeA = a.criadoEm ? new Date(a.criadoEm).getTime() : parseLocalDate(a.dataInicio).getTime();
+      const timeB = b.criadoEm ? new Date(b.criadoEm).getTime() : parseLocalDate(b.dataInicio).getTime();
+      return timeB - timeA;
     });
   }, [items, searchTerm, selectedTipo, selectedMonth, selectedYear]);
 
@@ -210,6 +237,7 @@ export const FrequenciasNotasView: React.FC = () => {
     setActiveCourse(course);
     setEditingAlunos([...course.alunos]);
     setEditingRowId(null);
+    setIsEditingAllRows(false);
     setIsPresencaGridOpen(false);
     setDateOffsetIndex(0);
 
@@ -219,6 +247,97 @@ export const FrequenciasNotasView: React.FC = () => {
     const mm = String(start.getMonth() + 1).padStart(2, '0');
     const dd = String(start.getDate()).padStart(2, '0');
     setSelectedBulkDateKey(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const handleOpenEditCourseMetadata = (course: ItemFrequenciaNota) => {
+    setEditingCourseMetadata(course);
+    const opsText = course.alunos.map(a => `${a.matDP || ''}\t${a.loginBB || ''}\t${a.nome}`).join('\n');
+    setEditCourseForm({
+      treinamento: course.treinamento,
+      tipo: course.tipo,
+      multiplicador: course.multiplicador,
+      horarioTreinamento: course.horarioTreinamento || '14:00 às 20:20',
+      salaId: course.salaId || '',
+      salaNome: course.salaNome || '',
+      dataInicio: course.dataInicio || '',
+      dataFim: course.dataFim || '',
+      listaOperadoresText: opsText
+    });
+  };
+
+  const handleSaveCourseMetadata = () => {
+    if (!editingCourseMetadata) return;
+
+    const lines = editCourseForm.listaOperadoresText
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    let updatedAlunos = editingCourseMetadata.alunos;
+    if (lines.length > 0) {
+      updatedAlunos = lines.map((line, idx) => {
+        let parsedMat = '';
+        let parsedLogin = '';
+        let parsedNome = '';
+
+        const tabSplit = line.split('\t').map(s => s.trim()).filter(Boolean);
+        if (tabSplit.length >= 3) {
+          parsedMat = tabSplit[0];
+          parsedLogin = tabSplit[1];
+          parsedNome = tabSplit.slice(2).join(' ');
+        } else if (tabSplit.length === 2) {
+          parsedMat = tabSplit[0];
+          parsedNome = tabSplit[1];
+        } else {
+          parsedNome = line;
+        }
+
+        const existing = editingCourseMetadata.alunos.find(a => 
+          (parsedLogin && a.loginBB?.toUpperCase() === parsedLogin.toUpperCase()) ||
+          (parsedMat && a.matDP?.toUpperCase() === parsedMat.toUpperCase()) ||
+          (parsedNome && a.nome.toUpperCase() === parsedNome.toUpperCase())
+        );
+
+        if (existing) {
+          return {
+            ...existing,
+            matDP: parsedMat || existing.matDP,
+            loginBB: parsedLogin || existing.loginBB,
+            nome: parsedNome || existing.nome
+          };
+        }
+
+        return {
+          id: `aln-${editingCourseMetadata.id}-${idx}`,
+          matDP: parsedMat || 'N/A',
+          loginBB: parsedLogin || 'N/A',
+          nome: parsedNome || line,
+          supervisor: 'N/A',
+          gerente: 'N/A',
+          celula: editingCourseMetadata.celulas[0] || 'GERAL',
+          frequenciaPercent: 100,
+          notaFinal: 10,
+          statusAprovacao: 'Em Andamento'
+        };
+      });
+    }
+
+    const selectedSala = salas.find(s => s.id === editCourseForm.salaId);
+    const finalSalaNome = editCourseForm.salaNome || selectedSala?.nome || '';
+
+    updateFrequenciaNota(editingCourseMetadata.id, {
+      treinamento: editCourseForm.treinamento,
+      tipo: editCourseForm.tipo,
+      multiplicador: editCourseForm.multiplicador,
+      horarioTreinamento: editCourseForm.horarioTreinamento,
+      salaId: editCourseForm.salaId || undefined,
+      salaNome: finalSalaNome || undefined,
+      dataInicio: editCourseForm.dataInicio,
+      dataFim: editCourseForm.dataFim,
+      alunos: updatedAlunos
+    });
+
+    setEditingCourseMetadata(null);
   };
 
   const handleAddOperatorRow = () => {
@@ -671,10 +790,20 @@ export const FrequenciasNotasView: React.FC = () => {
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                     {course.treinamento}
                   </h3>
-                  <div className="flex items-center space-x-3 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     <span>Células: <strong>{course.celulas.join(', ')}</strong></span>
                     <span>•</span>
                     <span>Multiplicador: <strong>{course.multiplicador}</strong></span>
+                    <span>•</span>
+                    <span className="inline-flex items-center space-x-1">
+                      <Clock className="w-3 h-3 text-indigo-500" />
+                      <span>Horário: <strong>{course.horarioTreinamento || '14:00 às 20:20'}</strong></span>
+                    </span>
+                    <span>•</span>
+                    <span className="inline-flex items-center space-x-1">
+                      <DoorOpen className="w-3 h-3 text-emerald-500" />
+                      <span>Sala: <strong>{course.salaNome || 'Sala de Treinamento'}</strong></span>
+                    </span>
                     <span>•</span>
                     <span>Período: <strong>{course.dataInicio} à {course.dataFim}</strong></span>
                   </div>
@@ -698,6 +827,15 @@ export const FrequenciasNotasView: React.FC = () => {
                   >
                     <FileCheck className="w-4 h-4" />
                     <span>Lançar Frequências e Notas</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditCourseMetadata(course)}
+                    className="p-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition-colors"
+                    title="Editar Informações do Treinamento (Multiplicador, Operadores, Horário, Sala)"
+                  >
+                    <Pencil className="w-4 h-4" />
                   </button>
 
                   <button
@@ -775,6 +913,20 @@ export const FrequenciasNotasView: React.FC = () => {
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Adicionar Linha</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingAllRows(prev => !prev)}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors shadow-2xs ${
+                      isEditingAllRows 
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
+                        : 'bg-slate-700 hover:bg-slate-600 text-white'
+                    }`}
+                    title="Habilitar/desabilitar edição de todas as linhas de operadores"
+                  >
+                    {isEditingAllRows ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+                    <span>{isEditingAllRows ? 'Concluir Edição de Linhas' : 'Editar Linhas'}</span>
                   </button>
 
                   <button
@@ -1050,12 +1202,12 @@ export const FrequenciasNotasView: React.FC = () => {
                       <tr key={aluno.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/50">
                         {/* MATRÍCULA DP */}
                         <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
-                          {isEditing ? (
+                          {isEditingAllRows || isEditing ? (
                             <input
                               type="text"
-                              value={editDraft.matDP}
-                              onChange={(e) => setEditDraft(prev => ({ ...prev, matDP: e.target.value }))}
-                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs font-semibold focus:outline-none"
+                              value={aluno.matDP || ''}
+                              onChange={(e) => handleUpdateStudent(aluno.id, 'matDP', e.target.value)}
+                              className="w-full px-1.5 py-1 border border-indigo-400 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs font-semibold focus:outline-hidden"
                               placeholder="Matrícula"
                             />
                           ) : (
@@ -1067,12 +1219,12 @@ export const FrequenciasNotasView: React.FC = () => {
 
                         {/* LOGIN BB */}
                         <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
-                          {isEditing ? (
+                          {isEditingAllRows || isEditing ? (
                             <input
                               type="text"
-                              value={editDraft.loginBB}
-                              onChange={(e) => setEditDraft(prev => ({ ...prev, loginBB: e.target.value }))}
-                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 font-mono text-xs font-bold focus:outline-none"
+                              value={aluno.loginBB || ''}
+                              onChange={(e) => handleUpdateStudent(aluno.id, 'loginBB', e.target.value)}
+                              className="w-full px-1.5 py-1 border border-indigo-400 rounded bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 font-mono text-xs font-bold focus:outline-hidden"
                               placeholder="Login BB"
                             />
                           ) : (
@@ -1084,12 +1236,12 @@ export const FrequenciasNotasView: React.FC = () => {
 
                         {/* NOME OPERADOR */}
                         <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
-                          {isEditing ? (
+                          {isEditingAllRows || isEditing ? (
                             <input
                               type="text"
-                              value={editDraft.nome}
-                              onChange={(e) => setEditDraft(prev => ({ ...prev, nome: e.target.value }))}
-                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none"
+                              value={aluno.nome || ''}
+                              onChange={(e) => handleUpdateStudent(aluno.id, 'nome', e.target.value)}
+                              className="w-full px-1.5 py-1 border border-indigo-400 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-hidden"
                               placeholder="Nome do Operador"
                             />
                           ) : (
@@ -1282,58 +1434,26 @@ export const FrequenciasNotasView: React.FC = () => {
 
                         {/* AÇÃO */}
                         <td className="p-1 text-center">
-                          {isEditing ? (
-                            <div className="flex items-center justify-center space-x-1">
-                              <button
-                                type="button"
-                                onClick={() => handleSaveRow(aluno.id)}
-                                className="flex items-center space-x-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-xs transition-colors"
-                                title="Salvar edição da linha"
-                              >
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span>Salvar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleCancelRowEdit}
-                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                                title="Cancelar"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center space-x-1">
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditRow(aluno)}
-                                className="flex items-center space-x-1 px-2 py-0.5 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded transition-colors text-[10px] font-bold"
-                                title="Editar Matrícula, Login e Nome"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                                <span>Editar</span>
-                              </button>
+                          <div className="flex items-center justify-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAlunoDossie({ aluno, course: activeCourse })}
+                              className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded transition-colors text-[10px] font-extrabold shadow-2xs"
+                              title="Abrir / Preencher Dossiê do Colaborador (Foto, Vivências em Sala, Avaliações)"
+                            >
+                              <UserCheck className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                              <span>Dossiê</span>
+                            </button>
 
-                              <button
-                                type="button"
-                                onClick={() => setSelectedAlunoDossie({ aluno, course: activeCourse })}
-                                className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded transition-colors text-[10px] font-extrabold shadow-2xs"
-                                title="Abrir / Preencher Dossiê do Colaborador (Foto, Vivências em Sala, Avaliações)"
-                              >
-                                <UserCheck className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-                                <span>Dossiê</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
-                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
-                                title="Remover operador"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
+                              title="Remover operador"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1507,6 +1627,150 @@ export const FrequenciasNotasView: React.FC = () => {
           onClose={() => setSelectedAlunoDossie(null)}
           onSaveDossie={handleSaveDossie}
         />
+      )}
+
+      {/* MODAL PARA EDITAR INFORMAÇÕES DO TREINAMENTO (Pencil Icon) */}
+      {editingCourseMetadata && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center space-x-2">
+                <Pencil className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Editar Informações do Treinamento
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCourseMetadata(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                  Nome do Treinamento:
+                </label>
+                <input
+                  type="text"
+                  value={editCourseForm.treinamento}
+                  onChange={(e) => setEditCourseForm(prev => ({ ...prev, treinamento: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Multiplicador:
+                  </label>
+                  <select
+                    value={editCourseForm.multiplicador}
+                    onChange={(e) => setEditCourseForm(prev => ({ ...prev, multiplicador: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                  >
+                    <option value="">Selecione o Multiplicador...</option>
+                    {multiplicadores.map(m => (
+                      <option key={m.id} value={m.nome}>{m.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Horário do Treinamento:
+                  </label>
+                  <input
+                    type="text"
+                    value={editCourseForm.horarioTreinamento}
+                    onChange={(e) => setEditCourseForm(prev => ({ ...prev, horarioTreinamento: e.target.value }))}
+                    placeholder="Ex: 14:00 às 20:20"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Sala de Treinamento:
+                  </label>
+                  <select
+                    value={editCourseForm.salaId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const found = salas.find(s => s.id === id);
+                      setEditCourseForm(prev => ({ ...prev, salaId: id, salaNome: found ? found.nome : prev.salaNome }));
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                  >
+                    <option value="">Selecione a Sala...</option>
+                    {salas.map(s => (
+                      <option key={s.id} value={s.id}>{s.nome} ({s.capacidade} lug.)</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Data Início:
+                  </label>
+                  <input
+                    type="date"
+                    value={editCourseForm.dataInicio}
+                    onChange={(e) => setEditCourseForm(prev => ({ ...prev, dataInicio: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Data Término:
+                  </label>
+                  <input
+                    type="date"
+                    value={editCourseForm.dataFim}
+                    onChange={(e) => setEditCourseForm(prev => ({ ...prev, dataFim: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                  Lista de Operadores (Um por linha - Matrícula | Login BB | Nome):
+                </label>
+                <textarea
+                  rows={4}
+                  value={editCourseForm.listaOperadoresText}
+                  onChange={(e) => setEditCourseForm(prev => ({ ...prev, listaOperadoresText: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-mono text-xs text-slate-900 dark:text-white focus:outline-hidden"
+                  placeholder="Ex: 52792&#9;C1234567&#9;HIGOR COUTINHO DE OLIVEIRA"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingCourseMetadata(null)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCourseMetadata}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* CONFIRMATION MODAL FOR DELETE COURSE */}
