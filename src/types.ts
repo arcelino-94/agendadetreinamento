@@ -74,6 +74,7 @@ export interface Demanda {
   dataFim?: string | null;
   multiplicadorId?: string | null;
   multiplicadorNome?: string | null;
+  horarioTreinamento?: string | null;
 }
 
 export interface Turma {
@@ -221,6 +222,7 @@ export interface ItemFrequenciaNota {
   dataInicio: string;
   dataFim: string;
   multiplicador: string;
+  horarioTreinamento?: string;
   cargaHoraria: string;
   alunos: AlunoFrequenciaNota[];
   status: 'Em Andamento' | 'Concluído';

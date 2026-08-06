@@ -45,6 +45,11 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [selectedMultiplicadorId, setSelectedMultiplicadorId] = useState('');
+  const [horarioTreinamento, setHorarioTreinamento] = useState('14:00 às 20:20');
+
+  // Checkboxes para formato das colunas do Boletim (Matrícula DP e/ou Nome)
+  const [hasMatDP, setHasMatDP] = useState(false);
+  const [hasNome, setHasNome] = useState(true);
 
   const [listaOperadoresText, setListaOperadoresText] = useState('');
   const [observacoes, setObservacoes] = useState('');
@@ -73,6 +78,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setDataInicio(initialDemanda.dataInicio || new Date().toISOString().split('T')[0]);
       setDataFim(initialDemanda.dataFim || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
       setSelectedMultiplicadorId(initialDemanda.multiplicadorId || '');
+      setHorarioTreinamento(initialDemanda.horarioTreinamento || '14:00 às 20:20');
       setListaOperadoresText(initialDemanda.listaOperadores ? initialDemanda.listaOperadores.join('\n') : '');
       setObservacoes(initialDemanda.observacoes || '');
     } else {
@@ -91,6 +97,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
       setDataInicio(new Date().toISOString().split('T')[0]);
       setDataFim(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
       setSelectedMultiplicadorId(multiplicadores.length > 0 ? multiplicadores[0].id : '');
+      setHorarioTreinamento('14:00 às 20:20');
       setListaOperadoresText('');
       setObservacoes('');
     }
@@ -169,6 +176,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         dataFim: isPeriodoType ? dataFim : null,
         multiplicadorId: selectedMultiplicadorId,
         multiplicadorNome,
+        horarioTreinamento: isPeriodoType ? horarioTreinamento : null,
         qtdOperadores: qtdOperadoresCalculated,
         listaOperadores: parsedLogins,
         observacoes
@@ -191,6 +199,7 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
         dataFim: isPeriodoType ? dataFim : null,
         multiplicadorId: selectedMultiplicadorId,
         multiplicadorNome,
+        horarioTreinamento: isPeriodoType ? horarioTreinamento : null,
         qtdOperadores: qtdOperadoresCalculated,
         listaOperadores: parsedLogins,
         status: 'Novo',
@@ -334,28 +343,43 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
-                  Multiplicador Condução do Treinamento:
-                </label>
-                <select
-                  value={selectedMultiplicadorId}
-                  onChange={(e) => setSelectedMultiplicadorId(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
-                >
-                  <option value="">Selecione o Multiplicador...</option>
-                  {multiplicadores
-                    .filter(m => m.status !== 'Ausente')
-                    .map(m => (
-                      <option key={m.id} value={m.id}>
-                        {formatShortName(m.nome)}
-                      </option>
-                    ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Multiplicador Condução do Treinamento:
+                  </label>
+                  <select
+                    value={selectedMultiplicadorId}
+                    onChange={(e) => setSelectedMultiplicadorId(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white focus:outline-hidden"
+                  >
+                    <option value="">Selecione o Multiplicador...</option>
+                    {multiplicadores
+                      .filter(m => m.status !== 'Ausente')
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {formatShortName(m.nome)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                    Horário do Treinamento:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 14:00 às 20:20"
+                    value={horarioTreinamento}
+                    onChange={(e) => setHorarioTreinamento(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white focus:outline-hidden"
+                  />
+                </div>
               </div>
             </div>
           ) : (
-            /* Campos Padrão para Alinhamento, Reciclagem, Retorno LMG */
+            /* Campos Padrão para Alinhamento, Reciclagem */
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
@@ -432,20 +456,69 @@ export const NovaDemandaModal: React.FC<NovaDemandaModalProps> = ({
             </>
           )}
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold">
-                Lista de Operadores (1 login por linha):
+          {/* LISTA DE OPERADORES COM SELEÇÃO DE COLUNAS */}
+          <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="block text-slate-700 dark:text-slate-300 font-bold">
+                Lista de Operadores:
               </label>
-              <span className="text-[11px] text-slate-400 font-normal">
-                (Opcional - pode adicionar depois)
-              </span>
+
+              {/* Caixas de Seleção para Matrícula DP e/ou Nome */}
+              <div className="flex items-center space-x-3 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Campos a colar:</span>
+                <label className="flex items-center space-x-1 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                  <input 
+                    type="checkbox" 
+                    checked={hasMatDP} 
+                    onChange={(e) => setHasMatDP(e.target.checked)} 
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Matrícula DP</span>
+                </label>
+                <label className="flex items-center space-x-1 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                  <input 
+                    type="checkbox" 
+                    checked={hasNome} 
+                    onChange={(e) => setHasNome(e.target.checked)} 
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Nome</span>
+                </label>
+              </div>
             </div>
+
+            {/* Texto com instruções claras para o usuário */}
+            <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium bg-indigo-50 dark:bg-indigo-950/50 p-2 rounded-xl border border-indigo-200 dark:border-indigo-900/60">
+              {hasMatDP && hasNome ? (
+                <p>
+                  <strong>Instruções:</strong> Cole a <strong>Matrícula DP</strong> e o <strong>Nome</strong> na mesma linha (separados por tabulação/espaço). Preenche a 1ª e 3ª coluna no Boletim de Frequências e Notas.
+                </p>
+              ) : hasNome ? (
+                <p>
+                  <strong>Instruções:</strong> Cole apenas os <strong>Nomes</strong> dos operadores (1 por linha). Preenche automaticamente a 3ª coluna (NOME) no Boletim de Frequências e Notas.
+                </p>
+              ) : hasMatDP ? (
+                <p>
+                  <strong>Instruções:</strong> Cole apenas a <strong>Matrícula DP / Login</strong> (1 por linha). Preenche a 1ª coluna (Matrícula DP) no Boletim de Frequências e Notas.
+                </p>
+              ) : (
+                <p>
+                  <strong>Instruções:</strong> Cole 1 informação por linha (Matrícula, Login ou Nome).
+                </p>
+              )}
+            </div>
+
             <textarea
               rows={4}
               value={listaOperadoresText}
               onChange={(e) => setListaOperadoresText(e.target.value)}
-              placeholder="C1315137&#10;C1286562&#10;C1274287&#10;C1276914"
+              placeholder={
+                hasMatDP && hasNome 
+                  ? "52792\tHIGOR COUTINHO DE OLIVEIRA\n52796\tJOAO IGOR PEREIRA DE AQUINO\n52797\tKAUA JOSE FERREIRA BARBOSA"
+                  : hasNome 
+                    ? "Maria Severina\nJosé Augusto\nPedro Henrique"
+                    : "52792\n52796\n52797"
+              }
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-mono text-slate-900 dark:text-white focus:outline-hidden"
             />
           </div>

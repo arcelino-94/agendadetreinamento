@@ -36,6 +36,7 @@ import { PasswordConfirmModal } from './PasswordConfirmModal';
 import { AlunoPresencaCalendarModal } from './AlunoPresencaCalendarModal';
 import { AlunoNotasModal } from './AlunoNotasModal';
 import { AlunoDossieModal } from './AlunoDossieModal';
+import { handleExportExcelDossie } from '../utils/excelExport';
 
 const parseLocalDate = (dateStr?: string): Date => {
   if (!dateStr) return new Date();
@@ -490,82 +491,7 @@ export const FrequenciasNotasView: React.FC = () => {
   };
 
   const handleExportCSV = (course: ItemFrequenciaNota) => {
-    // Generate dates list for daily presence headers
-    const start = course.dataInicio ? new Date(course.dataInicio) : new Date();
-    const datesList: string[] = [];
-    for (let i = 0; i < 25; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      datesList.push(`${yyyy}-${mm}-${dd}`);
-    }
-
-    const headers = [
-      'MAT_DP',
-      'LOGIN_BB',
-      'NOME',
-      'SUPERVISOR',
-      'GERENTE',
-      'CELULA',
-      'FREQUENCIA_%',
-      'NOTA_FINAL',
-      'STATUS_APROVACAO',
-      'FOTO_DOSSIE_REGISTRADA',
-      'DOSSIE_PLATAFORMA_BB',
-      'DOSSIE_SISBB',
-      'DOSSIE_DOMINIO_COMPUTADOR',
-      'DOSSIE_OBS_TECNICO',
-      'DOSSIE_FLUENCIA_VERBAL',
-      'DOSSIE_CORDIALIDADE',
-      'DOSSIE_RELACIONAMENTO_INTERPESSOAL',
-      'DOSSIE_PONTUALIDADE',
-      'DOSSIE_OBS_COMPORTAMENTO',
-      'DOSSIE_OUTRAS_CONSIDERACOES',
-      'HISTORICO_PROVAS',
-      ...datesList.map(d => `FREQ_${d}`)
-    ];
-
-    const rows = course.alunos.map(a => {
-      const dossie = a.dossie || {};
-      const provasStr = (a.provas || []).map(p => `${p.nomeProva}: ${p.nota}`).join(' | ');
-      const freqCols = datesList.map(d => a.presencaDiaria?.[d]?.frequencia || '');
-
-      return [
-        `"${a.matDP}"`,
-        `"${a.loginBB}"`,
-        `"${a.nome.replace(/"/g, '""')}"`,
-        `"${a.supervisor.replace(/"/g, '""')}"`,
-        `"${a.gerente.replace(/"/g, '""')}"`,
-        `"${a.celula.replace(/"/g, '""')}"`,
-        `${a.frequenciaPercent}%`,
-        `${a.notaFinal}`,
-        `"${a.statusAprovacao}"`,
-        `"${dossie.fotoUrl ? 'SIM' : 'NÃO'}"`,
-        `"${dossie.plataformaBB || ''}"`,
-        `"${dossie.sisbb || ''}"`,
-        `"${dossie.dominioComputador || ''}"`,
-        `"${(dossie.obsTecnico || '').replace(/"/g, '""')}"`,
-        `"${dossie.fluenciaVerbal || ''}"`,
-        `"${dossie.cordialidade || ''}"`,
-        `"${dossie.relacionamentoInterpessoal || ''}"`,
-        `"${dossie.pontualidade || ''}"`,
-        `"${(dossie.obsComportamento || '').replace(/"/g, '""')}"`,
-        `"${(dossie.outrasConsideracoes || '').replace(/"/g, '""')}"`,
-        `"${provasStr.replace(/"/g, '""')}"`,
-        ...freqCols.map(f => `"${f}"`)
-      ];
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `dossie_boletim_${course.treinamento.replace(/\s+/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    handleExportExcelDossie(course);
   };
 
   return (
@@ -756,33 +682,28 @@ export const FrequenciasNotasView: React.FC = () => {
 
                 <div className="flex items-center space-x-2 self-end md:self-center">
                   <button
-                    onClick={() => setActiveTab('rastreabilidade')}
-                    className="flex items-center space-x-1 px-3 py-1.5 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-xl text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors"
-                    title="Ver Cronograma e Rastreabilidade do Treinamento"
+                    type="button"
+                    onClick={() => handleExportExcelDossie(course)}
+                    className="flex items-center space-x-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                    title="Exportar planilha Excel completa com Dossiê dos Operadores, Frequências e Notas"
                   >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                    <span>Rastreabilidade</span>
+                    <Download className="w-4 h-4" />
+                    <span>Dossiê</span>
                   </button>
 
                   <button
-                    onClick={() => handleExportCSV(course)}
-                    className="flex items-center space-x-1 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                  >
-                    <Download className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Boletim CSV</span>
-                  </button>
-
-                  <button
+                    type="button"
                     onClick={() => handleOpenCourseDetails(course)}
-                    className="flex items-center space-x-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                    className="flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
                   >
-                    <FileCheck className="w-3.5 h-3.5" />
-                    <span>Lançar Frequência & Notas</span>
+                    <FileCheck className="w-4 h-4" />
+                    <span>Lançar Frequências e Notas</span>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => setDeletingCourseId(course.id)}
-                    className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900 transition-colors"
+                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                     title="Excluir este programa/turma"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -790,7 +711,7 @@ export const FrequenciasNotasView: React.FC = () => {
                 </div>
               </div>
 
-              {/* COURSE QUICK METRICS & OPERATORS LIST SNAPSHOT */}
+              {/* COURSE QUICK METRICS */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl">
                 <div>
                   <span className="text-slate-400 text-[10px] uppercase font-bold block">Convocados</span>
@@ -812,52 +733,6 @@ export const FrequenciasNotasView: React.FC = () => {
                 </div>
               </div>
 
-              {/* QUICK OPERATOR CHIPS (CLICK FREQ OR GRADE TO OPEN MODAL) */}
-              <div className="pt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                  Boletim dos Operadores (Clique no % para Calendário ou na Nota para Provas):
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {course.alunos.map(aluno => (
-                    <div 
-                      key={aluno.id}
-                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 flex items-center space-x-2 text-xs shadow-2xs"
-                    >
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white block truncate max-w-[140px] text-[11px]">
-                          {aluno.nome}
-                        </span>
-                        <span className="text-[9px] font-mono text-slate-400">
-                          {aluno.loginBB || aluno.matDP}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center space-x-1 pl-1 border-l border-slate-100 dark:border-slate-700">
-                        {/* CLICKABLE FREQUENCY % */}
-                        <button
-                          onClick={() => setSelectedAlunoCalendar({ aluno, course })}
-                          className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-extrabold text-[10px] hover:bg-emerald-100 transition-colors flex items-center space-x-1"
-                          title="Clique para abrir Calendário de Frequência"
-                        >
-                          <Calendar className="w-2.5 h-2.5" />
-                          <span>{aluno.frequenciaPercent}%</span>
-                        </button>
-
-                        {/* CLICKABLE GRADE */}
-                        <button
-                          onClick={() => setSelectedAlunoNotas({ aluno, course })}
-                          className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-extrabold text-[10px] hover:bg-amber-100 transition-colors flex items-center space-x-1"
-                          title="Clique para ver Provas e Avaliações"
-                        >
-                          <Award className="w-2.5 h-2.5" />
-                          <span>{aluno.notaFinal}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
             </div>
           );
         })}
@@ -876,249 +751,246 @@ export const FrequenciasNotasView: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-6xl w-full border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
             
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                  Boletim de Frequência & Notas • {activeCourse.tipo}
-                </span>
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {activeCourse.treinamento}
-                </h2>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Data de Início oficial: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{activeCourse.dataInicio}</strong> • Término: {activeCourse.dataFim}
-                </p>
+            {/* STICKY TOP HEADER & BULK CONTROL BAR */}
+            <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 pt-1 pb-3 space-y-3 border-b border-slate-200 dark:border-slate-800 -mx-6 px-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    Boletim de Frequência & Notas • {activeCourse.tipo}
+                  </span>
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    {activeCourse.treinamento}
+                  </h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Data de Início oficial: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{activeCourse.dataInicio}</strong> • Término: {activeCourse.dataFim} {activeCourse.horarioTreinamento ? `• Horário: ${activeCourse.horarioTreinamento}` : ''}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddOperatorRow}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                    title="Acrescentar mais uma linha para operador"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Linha</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPresencaGridOpen(prev => !prev)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                    title="Abrir/fechar lançamento de presença diária"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{isPresencaGridOpen ? 'Ocultar Lançamento Diário' : 'Lançar Presença Diária'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsLancarNotaOpen(true)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Lançar Prova / Nota</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {}}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs cursor-pointer opacity-90"
+                    title="Rastreabilidade (Recurso em breve)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+                    <span>Rastreabilidade</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveCourse(null)}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={handleAddOperatorRow}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
-                  title="Acrescentar mais uma linha para operador"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Adicionar Linha</span>
-                </button>
+              {/* SOBER ELEGANT DAILY PRESENCE ENTRY & BULK FILL BAR */}
+              {isPresencaGridOpen && (
+                <div className="bg-slate-800 dark:bg-slate-850 rounded-xl p-3 text-white shadow-sm border border-slate-700/80 space-y-2.5">
+                  
+                  {/* TOP CONTROL BAR: DATE SELECTOR & BULK FILL BUTTON */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-700/80">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-slate-200 flex items-center space-x-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Data do Lançamento:</span>
+                      </span>
 
-                <button
-                  type="button"
-                  onClick={() => setIsPresencaGridOpen(prev => !prev)}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs ${
-                    isPresencaGridOpen ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
-                  }`}
-                  title="Abrir/fechar lançamento de presença diária"
-                >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{isPresencaGridOpen ? 'Ocultar Lançamento Diário' : 'Lançar Presença Diária'}</span>
-                </button>
+                      <select
+                        value={selectedBulkDateKey}
+                        onChange={(e) => setSelectedBulkDateKey(e.target.value)}
+                        className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-white outline-none focus:ring-1 focus:ring-slate-500"
+                      >
+                        {generatedDates.map(d => (
+                          <option key={d.fullDate} value={d.fullDate}>
+                            {d.formattedFull}
+                          </option>
+                        ))}
+                      </select>
 
-                <button
-                  type="button"
-                  onClick={() => setIsLancarNotaOpen(true)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
-                >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>Lançar Prova / Nota</span>
-                </button>
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-0.5">
+                        para todos:
+                      </span>
 
-                <button
-                  type="button"
-                  onClick={() => handleExportCSV({ ...activeCourse, alunos: editingAlunos })}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
-                  title="Exportar planilha completa da turma com Dossiê, Frequência Diária e Notas"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Exportar Dossiê & Boletim</span>
-                </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'P')}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          title="Marcar Presença (P) para TODOS"
+                        >
+                          Presença
+                        </button>
 
-                <button
-                  onClick={() => setActiveCourse(null)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FI')}
+                          className="px-2.5 py-1 bg-rose-700 hover:bg-rose-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          title="Marcar Falta Injustificada (FI) para todos"
+                        >
+                          FI
+                        </button>
 
-            {/* UNPOLLUTED DAILY PRESENCE ENTRY & BULK FILL BAR */}
-            {isPresencaGridOpen && (
-              <div className="bg-gradient-to-r from-indigo-900 via-indigo-850 to-slate-900 rounded-2xl p-4 text-white shadow-md border border-indigo-700/60 space-y-3">
-                
-                {/* TOP CONTROL BAR: DATE SELECTOR & BULK FILL BUTTON */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-indigo-700/50">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold text-amber-300 flex items-center space-x-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>Data do Lançamento:</span>
-                    </span>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FJ')}
+                          className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          title="Marcar Falta Justificada (FJ) para todos"
+                        >
+                          FJ
+                        </button>
 
-                    <select
-                      value={selectedBulkDateKey}
-                      onChange={(e) => setSelectedBulkDateKey(e.target.value)}
-                      className="px-3 py-1.5 bg-slate-800 border border-indigo-500/60 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-amber-400"
-                    >
-                      {generatedDates.map(d => (
-                        <option key={d.fullDate} value={d.fullDate}>
-                          {d.formattedFull}
-                        </option>
-                      ))}
-                    </select>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'DRS')}
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          title="Marcar DSR para todos"
+                        >
+                          DSR
+                        </button>
 
-                    <span className="text-xs font-extrabold text-amber-300 uppercase tracking-wider px-1">
-                      para todos:
-                    </span>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'BH')}
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          title="Marcar Banco de Horas (BH) para todos"
+                        >
+                          BH
+                        </button>
 
-                    <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FERIADO')}
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          title="Marcar Feriado para todos"
+                        >
+                          Feriado
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* MODE SWITCHER (POR DIA / TODO O PERÍODO) WITHOUT EMOJIS */}
+                    <div className="flex items-center space-x-2 shrink-0">
+                      {presenceViewMode === 'matriz' && (
+                        <div className="flex items-center space-x-1.5 bg-slate-900 px-2 py-1 rounded-lg border border-slate-700 mr-1">
+                          <span className="text-[10px] text-slate-300 font-bold">Dias:</span>
+                          <input
+                            type="number"
+                            min={5}
+                            max={90}
+                            value={trainingDaysCount}
+                            onChange={(e) => setTrainingDaysCount(Math.max(1, parseInt(e.target.value) || 25))}
+                            className="w-12 px-1 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-xs font-bold text-white"
+                            title="Quantidade total de dias do treinamento"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setTrainingDaysCount(prev => prev + 5)}
+                            className="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px] font-bold"
+                            title="Acrescentar +5 dias de treinamento"
+                          >
+                            +5d
+                          </button>
+                        </div>
+                      )}
+
+                      <span className="text-[11px] text-slate-300 font-medium">Visualização:</span>
                       <button
                         type="button"
-                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'P')}
-                        className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black rounded-xl text-xs shadow-md transition-all active:scale-95"
-                        title="Marcar Presença (P) para TODOS"
+                        onClick={() => setPresenceViewMode('lote')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                          presenceViewMode === 'lote' ? 'bg-slate-700 text-white shadow-2xs' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
+                        }`}
                       >
-                        <span>Presença</span>
+                        Por dia
                       </button>
-
                       <button
                         type="button"
-                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FI')}
-                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
-                        title="Marcar Falta Injustificada (FI) para todos"
+                        onClick={() => setPresenceViewMode('matriz')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                          presenceViewMode === 'matriz' ? 'bg-slate-700 text-white shadow-2xs' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
+                        }`}
                       >
-                        FI
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FJ')}
-                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
-                        title="Marcar Falta Justificada (FJ) para todos"
-                      >
-                        FJ
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'DRS')}
-                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
-                        title="Marcar DSR para todos"
-                      >
-                        DSR
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'BH')}
-                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
-                        title="Marcar Banco de Horas (BH) para todos"
-                      >
-                        BH
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FERIADO')}
-                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
-                        title="Marcar Feriado para todos"
-                      >
-                        Feriado
+                        Todo o Período
                       </button>
                     </div>
                   </div>
 
-                  {/* MODE SWITCHER (POR DIA / TODO O PERÍODO) */}
-                  <div className="flex items-center space-x-2 shrink-0">
-                    {presenceViewMode === 'matriz' && (
-                      <div className="flex items-center space-x-1.5 bg-slate-800/80 px-2 py-1 rounded-lg border border-indigo-500/40 mr-2">
-                        <span className="text-[10px] text-indigo-200 font-bold">Dias:</span>
+                  {/* BULK HORA EXTRA & OBS INPUTS */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/90 p-2 rounded-lg border border-slate-700/80">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-slate-300">Hora Extra em Lote:</span>
                         <input
-                          type="number"
-                          min={5}
-                          max={90}
-                          value={trainingDaysCount}
-                          onChange={(e) => setTrainingDaysCount(Math.max(1, parseInt(e.target.value) || 25))}
-                          className="w-12 px-1 py-0.5 bg-slate-900 border border-slate-700 rounded text-center text-xs font-extrabold text-amber-300"
-                          title="Quantidade total de dias do treinamento"
+                          type="text"
+                          placeholder="Ex: 01:00"
+                          value={bulkHoraExtraInput}
+                          onChange={(e) => setBulkHoraExtraInput(e.target.value)}
+                          className="w-24 px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-white font-mono text-xs font-bold"
                         />
                         <button
                           type="button"
-                          onClick={() => setTrainingDaysCount(prev => prev + 5)}
-                          className="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold"
-                          title="Acrescentar +5 dias de treinamento"
+                          onClick={() => handleBulkApplyHoraExtra(selectedBulkDateKey, bulkHoraExtraInput)}
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-md transition-colors"
                         >
-                          +5d
+                          Aplicar HE
                         </button>
                       </div>
-                    )}
 
-                    <span className="text-[11px] text-indigo-200 font-medium">Visualização:</span>
-                    <button
-                      type="button"
-                      onClick={() => setPresenceViewMode('lote')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                        presenceViewMode === 'lote' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-800 text-indigo-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      📋 Por dia
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPresenceViewMode('matriz')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                        presenceViewMode === 'matriz' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-800 text-indigo-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      📊 Todo o Período
-                    </button>
-                  </div>
-                </div>
-
-                {/* BULK HORA EXTRA & OBS INPUTS */}
-                <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-indigo-950/60 p-2.5 rounded-xl border border-indigo-700/40">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="font-bold text-indigo-200">Hora Extra em Lote:</span>
-                      <input
-                        type="text"
-                        placeholder="Ex: 01:00"
-                        value={bulkHoraExtraInput}
-                        onChange={(e) => setBulkHoraExtraInput(e.target.value)}
-                        className="w-24 px-2 py-1 bg-slate-900 border border-indigo-500/50 rounded-lg text-white font-mono text-xs font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleBulkApplyHoraExtra(selectedBulkDateKey, bulkHoraExtraInput)}
-                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors"
-                      >
-                        Aplicar HE
-                      </button>
-                    </div>
-
-                    <div className="flex items-center space-x-1.5">
-                      <span className="font-bold text-indigo-200">Obs em Lote:</span>
-                      <input
-                        type="text"
-                        placeholder="Ex: Sala 3 / SARB"
-                        value={bulkObsInput}
-                        onChange={(e) => setBulkObsInput(e.target.value)}
-                        className="w-40 px-2 py-1 bg-slate-900 border border-indigo-500/50 rounded-lg text-white text-xs font-medium"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleBulkApplyObs(selectedBulkDateKey, bulkObsInput)}
-                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors"
-                      >
-                        Aplicar Obs
-                      </button>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-slate-300">Obs em Lote:</span>
+                        <input
+                          type="text"
+                          placeholder="Liberação antecipada"
+                          value={bulkObsInput}
+                          onChange={(e) => setBulkObsInput(e.target.value)}
+                          className="w-44 px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-white text-xs font-medium"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleBulkApplyObs(selectedBulkDateKey, bulkObsInput)}
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-md transition-colors"
+                        >
+                          Aplicar Obs
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  <span className="text-[11px] text-amber-300/90 italic">
-                    💡 Dica: Clique em "Lançar Presença (P) para Todos", e depois altere somente quem faltou!
-                  </span>
                 </div>
-
-              </div>
-            )}
+              )}
+            </div>
 
             {/* STUDENTS LIST TABLE */}
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto min-h-[250px]">

@@ -1020,22 +1020,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Auto create tabulador entry for new demand, pulling data from quadroOperadores
     const parsedLogins = demandaData.listaOperadores || [];
     const ops: OperadorAlinhamento[] = parsedLogins.map(item => {
-      const cleanStr = item.trim().toUpperCase();
+      const line = item.trim();
+      if (!line) return null;
+
+      // Check if line contains tab or space separated Matrícula/Login and Name
+      let parsedMat = '';
+      let parsedNome = '';
+
+      const tabSplit = line.split('\t').map(s => s.trim()).filter(Boolean);
+      if (tabSplit.length >= 2) {
+        parsedMat = tabSplit[0];
+        parsedNome = tabSplit.slice(1).join(' ');
+      } else {
+        // Try regex for leading digits/codes followed by spaces and name
+        const match = line.match(/^([A-Z0-9_-]{3,10})\s+(.+)$/i);
+        if (match) {
+          parsedMat = match[1];
+          parsedNome = match[2];
+        } else {
+          // Single value or name without code
+          if (/^[A-Z]?\d{4,8}$/i.test(line)) {
+            parsedMat = line;
+          } else {
+            parsedNome = line;
+          }
+        }
+      }
+
+      const searchKey = (parsedMat || parsedNome).toUpperCase();
       const q = operadores.find(op => 
-        op.loginBB.toUpperCase() === cleanStr || 
-        op.matDP.toUpperCase() === cleanStr || 
-        op.nome.toUpperCase().includes(cleanStr)
+        (parsedMat && (op.matDP.toUpperCase() === parsedMat.toUpperCase() || op.loginBB.toUpperCase() === parsedMat.toUpperCase())) ||
+        (parsedNome && op.nome.toUpperCase() === parsedNome.toUpperCase()) ||
+        op.loginBB.toUpperCase() === searchKey ||
+        op.matDP.toUpperCase() === searchKey
       );
+
       return {
-        loginBB: q ? q.loginBB : (cleanStr || 'N/A'),
-        nome: q ? q.nome : item,
-        matDP: q ? q.matDP : 'N/A',
+        loginBB: q ? q.loginBB : (parsedMat || 'N/A'),
+        nome: parsedNome || (q ? q.nome : line),
+        matDP: parsedMat || (q ? q.matDP : 'N/A'),
         supervisor: q ? q.supervisor : (demandaData.supervisor || 'N/A'),
         gerente: q ? q.gerente : 'N/A',
         segmento: q ? q.segmento : (demandaData.celulaNome || 'SAC PRIORITÁRIO'),
         statusPresenca: 'Pendente'
       };
-    });
+    }).filter(Boolean) as OperadorAlinhamento[];
 
     const convocados = ops.length || (demandaData.qtdOperadores || 0);
     const newTabuladorItem: AlinhamentoTabulador = {
@@ -1084,6 +1113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dataInicio: demandaData.dataInicio || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
         dataFim: demandaData.dataFim || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
         multiplicador: demandaData.multiplicadorNome || 'T&D/BB',
+        horarioTreinamento: demandaData.horarioTreinamento || undefined,
         cargaHoraria: '40h',
         alunos: alunosList,
         status: 'Em Andamento',
