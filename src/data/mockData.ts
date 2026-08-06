@@ -1,4 +1,4 @@
-import { Multiplicador, CelulaAtendimento, SalaTreinamento, Demanda, Turma, OperadorQuadro, AlinhamentoTabulador, ItemFrequenciaNota } from '../types';
+import { Multiplicador, CelulaAtendimento, SalaTreinamento, Demanda, Turma, OperadorQuadro, AlinhamentoTabulador, ItemFrequenciaNota, CronogramaRastreabilidade } from '../types';
 
 export const INITIAL_CELULAS: CelulaAtendimento[] = [
   { id: 'cel-1', nome: 'ROI', gestor: 'Jefferson Luiz', operadoresAtivos: 35 },
@@ -501,6 +501,85 @@ export const INITIAL_FREQUENCIAS_NOTAS: ItemFrequenciaNota[] = [
     alunos: [
       { id: 'aln-6', matDP: '36283', loginBB: 'C1274287', nome: 'MICHELE CORREIA CASSIMIRO', supervisor: 'Christiane Ferraz', gerente: 'Rosana Gomes', celula: 'MULTIMEIOS', frequenciaPercent: 95, notaFinal: 9.0, statusAprovacao: 'Aprovado' },
       { id: 'aln-7', matDP: '36016', loginBB: 'C1296728', nome: 'ANDREA ALVES DA SILVA', supervisor: 'Gleiberson Freitas', gerente: 'Rosana Gomes', celula: 'MULTIMEIOS', frequenciaPercent: 90, notaFinal: 8.2, statusAprovacao: 'Aprovado' }
+    ]
+  }
+];
+
+export const INITIAL_RASTREABILIDADES: CronogramaRastreabilidade[] = [
+  {
+    id: 'rast-1',
+    titulo: 'CRONOGRAMA DE TREINAMENTO INICIAL - CARTÃO PORTADOR',
+    tipo: 'celula',
+    refId: 'cel-9',
+    refNome: 'CARTAO PORTADOR',
+    instrutor: 'GEOVANNE FERREIRA DE ARCELINO',
+    dataInicio: '2026-08-01',
+    dataFim: '2026-08-31',
+    criadoEm: new Date().toISOString(),
+    conteudos: [
+      { id: 'cnt-1', ordem: 1, conteudo: 'PREENCHIMENTO PLANILHA ACESSOS', rotina: '-', cargaHoraria: '00:10', recursos: 'FORMS', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-2', ordem: 2, conteudo: 'PI + SIGILO BANCÁRIO + VÍDEO DTM', rotina: '-', cargaHoraria: '00:50', recursos: 'PPT+VÍDEO', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-3', ordem: 3, conteudo: 'CONCEITOS BANCÁRIOS', rotina: '-', cargaHoraria: '00:20', recursos: 'PPT', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-4', ordem: 4, conteudo: 'FERRAMENTAS DE ATENDIMENTO', rotina: '-', cargaHoraria: '00:20', recursos: 'PLATAFORMA BB, SISBB, SISCABB', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-5', ordem: 5, conteudo: 'NORMATIVO SARB', rotina: '76974', cargaHoraria: '00:10', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-6', ordem: 6, conteudo: 'CÓDIGO DE DEFESA DO CONSUMIDOR', rotina: '90572', cargaHoraria: '00:10', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-7', ordem: 7, conteudo: 'QC – ÉTICA E INTEGRIDADE ÉTICA', rotina: '121394', cargaHoraria: '00:10', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-8', ordem: 8, conteudo: 'TUT (TELEFONES ÚTEIS DA CRBB)', rotina: '2089', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-9', ordem: 9, conteudo: 'ENCONTRE O BB / INDISPONIBILIDADE DAS AGÊNCIAS', rotina: '17187', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-10', ordem: 10, conteudo: 'ÁRVORES (GERAL)', rotina: '16376', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-11', ordem: 11, conteudo: 'QC – SAUDAÇÕES INICIAL E FINAL', rotina: '22004', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-12', ordem: 12, conteudo: 'INCONSISTÊNCIAS NO SISTEMA', rotina: '93', cargaHoraria: '00:10', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-13', ordem: 13, conteudo: 'PROCEDIMENTO DE SEGURANÇA – ENVIO DE TOKEN', rotina: '56658', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-14', ordem: 14, conteudo: 'SCRIPT PROCEDIMENTOS OPERACIONAIS', rotina: '106', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-15', ordem: 15, conteudo: 'SITUAÇÕES ADVERSAS', rotina: '3222', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-16', ordem: 16, conteudo: 'ABORDAGENS ATIVAS', rotina: '2722', cargaHoraria: '00:10', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-17', ordem: 17, conteudo: 'DICAS - PORTAL DE INFORMAÇÕES', rotina: '70925', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-18', ordem: 18, conteudo: 'MATRIZ DE TRANSFERÊNCIA (RECEPTIVO)', rotina: '71750', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-19', ordem: 19, conteudo: 'SENHAS ÍNDICE', rotina: '2237', cargaHoraria: '01:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-20', ordem: 20, conteudo: 'SCRIPT-BASE DA PLATAFORMA DE ATENDIMENTO CARTÕES', rotina: '6599', cargaHoraria: '01:00', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-21', ordem: 21, conteudo: 'SCRIPT PORTADOR - ORIENTAÇÕES PARA CHECK LIST', rotina: '2698', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-22', ordem: 22, conteudo: 'CHECK LIST 1/2/3/4/5/6/7/8/BAIXA OCORRÊNCIA FALHA COM TOKEN', rotina: '699 / 7074', cargaHoraria: '01:00', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-23', ordem: 23, conteudo: 'ÍNDICE - CARTÕES PF', rotina: '-', cargaHoraria: '00:20', recursos: 'INICIAL DO PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-24', ordem: 24, conteudo: 'ATENDIMENTO RECEPTIVO - OFERTA DE CARTÃO DE CRÉDITO CORRENTISTAS', rotina: '507', cargaHoraria: '00:10', recursos: 'PORTAL DE INFORMAÇÕES', realizado: 'SÁBADO', status: 'Sábado' },
+      { id: 'cnt-25', ordem: 25, conteudo: 'SOLICITAÇÃO DO CARTÃO OUROCARD PARA PF NÃO CORRENTISTAS BB', rotina: '3085', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: 'SÁBADO', status: 'Sábado' },
+      { id: 'cnt-26', ordem: 26, conteudo: 'LIBERAÇÃO DE CARTÕES - PESSOA FÍSICA', rotina: '560', cargaHoraria: '00:40', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-27', ordem: 27, conteudo: 'ATIVAÇÃO DA FUNÇÃO CRÉDITO', rotina: '1394', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-28', ordem: 28, conteudo: 'PROCEDIMENTOS - ATIVAÇÃO DA FUNÇÃO CRÉDITO - EQUIPE PORTADOR', rotina: '7696', cargaHoraria: '00:30', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-29', ordem: 29, conteudo: 'CARTÃO ADICIONAL - INCLUSÃO', rotina: '1090', cargaHoraria: '00:40', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' },
+      { id: 'cnt-30', ordem: 30, conteudo: 'CARTÃO DIGITAL – (OUROCARD-D)', rotina: '61204', cargaHoraria: '00:20', recursos: 'PORTAL DE INFORMAÇÕES', realizado: 'SÁBADO', status: 'Sábado' }
+    ]
+  },
+  {
+    id: 'rast-2',
+    titulo: 'RASTREABILIDADE - SAC PRIORITÁRIO 2026',
+    tipo: 'celula',
+    refId: 'cel-5',
+    refNome: 'SAC PRIORITARIO',
+    instrutor: 'BRUNA THAIS DA SILVA SANTOS',
+    dataInicio: '2026-08-01',
+    dataFim: '2026-08-31',
+    criadoEm: new Date().toISOString(),
+    conteudos: [
+      { id: 'cnt-101', ordem: 1, conteudo: 'NORMATIVO SAC & DIREITOS DO CONSUMIDOR', rotina: '76974', cargaHoraria: '01:00', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '01/08/2026', status: 'Realizado' },
+      { id: 'cnt-102', ordem: 2, conteudo: 'REGISTRO DE RECLAMAÇÕES E PROTOCOLO SAC', rotina: '12139', cargaHoraria: '02:00', recursos: 'PLATAFORMA BB', realizado: '02/08/2026', status: 'Realizado' },
+      { id: 'cnt-103', ordem: 3, conteudo: 'ATENDIMENTO AO IDOSO E DEFICIENTE', rotina: '9057', cargaHoraria: '01:30', recursos: 'PPT+VÍDEO', realizado: '03/08/2026', status: 'Realizado' },
+      { id: 'cnt-104', ordem: 4, conteudo: 'TRATATIVA DE CASOS DE SEGUNDO NÍVEL', rotina: '3222', cargaHoraria: '02:00', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '04/08/2026', status: 'Realizado' }
+    ]
+  },
+  {
+    id: 'rast-3',
+    titulo: 'RASTREABILIDADE - TURMA FORMAÇÃO DE NOVATOS (SAC CARTÃO)',
+    tipo: 'turma',
+    refId: 'FN-101',
+    refNome: 'FORMAÇÃO DE NOVATOS - SAC CARTÃO 2026.1',
+    instrutor: 'MARIA CLARA DOS SANTOS',
+    dataInicio: '2026-07-01',
+    dataFim: '2026-07-25',
+    criadoEm: new Date().toISOString(),
+    conteudos: [
+      { id: 'cnt-201', ordem: 1, conteudo: 'INTRODUÇÃO À CÉLULA E SISTEMAS BB', rotina: '-', cargaHoraria: '04:00', recursos: 'FORMS / PPT', realizado: '01/07/2026', status: 'Realizado' },
+      { id: 'cnt-202', ordem: 2, conteudo: 'CONCEITOS DE CARTÃO E PRODUTOS', rotina: '6599', cargaHoraria: '06:00', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '05/07/2026', status: 'Realizado' },
+      { id: 'cnt-203', ordem: 3, conteudo: 'SEGURANÇA E PREVENÇÃO A FRAUDES', rotina: '56658', cargaHoraria: '04:00', recursos: 'PORTAL DE INFORMAÇÕES', realizado: '10/07/2026', status: 'Realizado' }
     ]
   }
 ];

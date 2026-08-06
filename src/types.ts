@@ -168,6 +168,33 @@ export interface PresencaDiariaItem {
   obs?: string;        // e.g. 'Operador chegou de 15:00 (20min atrasado)'
 }
 
+export interface ItemProvaNota {
+  id: string;
+  nomeProva: string;
+  dataProva?: string;
+  nota: number;
+}
+
+export type NivelClassificacao = 'ÓTIMO' | 'BOM' | 'REGULAR' | 'RUIM' | '';
+
+export interface DossieOperador {
+  fotoUrl?: string;
+  // Conhecimento Técnico
+  plataformaBB?: NivelClassificacao;
+  sisbb?: NivelClassificacao;
+  dominioComputador?: NivelClassificacao;
+  obsTecnico?: string;
+  // Comportamento
+  fluenciaVerbal?: NivelClassificacao;
+  cordialidade?: NivelClassificacao;
+  relacionamentoInterpessoal?: NivelClassificacao;
+  pontualidade?: NivelClassificacao;
+  obsComportamento?: string;
+  // Outras considerações
+  outrasConsideracoes?: string;
+  atualizadoEm?: string;
+}
+
 export interface AlunoFrequenciaNota {
   id: string;
   matDP: string;
@@ -181,6 +208,8 @@ export interface AlunoFrequenciaNota {
   statusAprovacao: 'Aprovado' | 'Reprovado' | 'Em Andamento';
   observacoes?: string;
   presencaDiaria?: Record<string, PresencaDiariaItem>; // Key: YYYY-MM-DD or date index string
+  provas?: ItemProvaNota[];
+  dossie?: DossieOperador;
 }
 
 export interface ItemFrequenciaNota {
@@ -196,6 +225,32 @@ export interface ItemFrequenciaNota {
   alunos: AlunoFrequenciaNota[];
   status: 'Em Andamento' | 'Concluído';
   criadoEm: string;
+}
+
+export interface ItemConteudoRastreabilidade {
+  id: string;
+  ordem: number;
+  conteudo: string;     // e.g. "PREENCHIMENTO PLANILHA ACESSOS"
+  rotina?: string;      // e.g. "76974"
+  cargaHoraria: string; // CH e.g. "00:10", "00:50", "01:30"
+  recursos?: string;    // e.g. "FORMS", "PPT+VÍDEO", "PORTAL DE INFORMAÇÕES"
+  realizado?: string;   // e.g. "01/08/2026", "SÁBADO", "REALIZADO", "PENDENTE"
+  status?: 'Realizado' | 'Pendente' | 'Sábado' | 'Em Andamento';
+  observacoes?: string;
+}
+
+export interface CronogramaRastreabilidade {
+  id: string;
+  titulo: string;        // e.g. "Cronograma de Treinamento - Cartão Portador"
+  tipo: 'celula' | 'turma' | 'geral';
+  refId: string;         // celulaId or frequenciaNotaId
+  refNome: string;       // celulaNome or treinamentoNome
+  instrutor?: string;
+  conteudos: ItemConteudoRastreabilidade[];
+  dataInicio?: string;
+  dataFim?: string;
+  criadoEm?: string;
+  atualizadoEm?: string;
 }
 
 export interface AuditLog {

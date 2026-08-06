@@ -12,6 +12,7 @@ import { SalasView } from './components/SalasView';
 import { RelatoriosView } from './components/RelatoriosView';
 import { TabuladorView } from './components/TabuladorView';
 import { FrequenciasNotasView } from './components/FrequenciasNotasView';
+import { RastreabilidadeView } from './components/RastreabilidadeView';
 import { QuadroOperadoresView } from './components/QuadroOperadoresView';
 import { JornadaOperadorView } from './components/JornadaOperadorView';
 import { SegurancaView } from './components/SegurancaView';
@@ -151,6 +152,10 @@ export function AppContent() {
 
           {activeTab === 'frequencias' && (
             <FrequenciasNotasView />
+          )}
+
+          {activeTab === 'rastreabilidade' && (
+            <RastreabilidadeView />
           )}
 
           {activeTab === 'quadro' && (

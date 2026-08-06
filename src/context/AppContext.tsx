@@ -11,6 +11,8 @@ import {
   AlinhamentoTabulador,
   ItemFrequenciaNota,
   AlunoFrequenciaNota,
+  CronogramaRastreabilidade,
+  ItemConteudoRastreabilidade,
   AuditLog,
   UserSession
 } from '../types';
@@ -23,6 +25,7 @@ import {
   INITIAL_OPERADORES,
   INITIAL_TABULADOR,
   INITIAL_FREQUENCIAS_NOTAS,
+  INITIAL_RASTREABILIDADES,
   INITIAL_AUDIT_LOGS
 } from '../data/mockData';
 import { isOverlapping } from '../lib/planningEngine';
@@ -48,6 +51,13 @@ interface AppContextType {
   operadores: OperadorQuadro[];
   tabulador: AlinhamentoTabulador[];
   frequenciasNotas: ItemFrequenciaNota[];
+  rastreabilidades: CronogramaRastreabilidade[];
+  addRastreabilidade: (item: Omit<CronogramaRastreabilidade, 'id' | 'criadoEm'>) => CronogramaRastreabilidade;
+  updateRastreabilidade: (id: string, updates: Partial<CronogramaRastreabilidade>) => void;
+  deleteRastreabilidade: (id: string) => void;
+  addConteudoRastreabilidade: (cronogramaId: string, item: Omit<ItemConteudoRastreabilidade, 'id'>) => void;
+  updateConteudoRastreabilidade: (cronogramaId: string, itemConteudoId: string, updates: Partial<ItemConteudoRastreabilidade>) => void;
+  deleteConteudoRastreabilidade: (cronogramaId: string, itemConteudoId: string) => void;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   activeTab: string;
@@ -231,6 +241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [operadores, setOperadores] = useState<OperadorQuadro[]>([]);
   const [tabulador, setTabulador] = useState<AlinhamentoTabulador[]>([]);
   const [frequenciasNotas, setFrequenciasNotas] = useState<ItemFrequenciaNota[]>([]);
+  const [rastreabilidades, setRastreabilidades] = useState<CronogramaRastreabilidade[]>([]);
 
   // Firebase & Sync Status
   const [firebaseConfig, setFirebaseConfigState] = useState<FirebaseConfigCustom | null>(null);
@@ -654,6 +665,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setOperadores(parsed.operadores || INITIAL_OPERADORES);
         setTabulador(sanitizeTabuladorData(parsed.tabulador));
         setFrequenciasNotas(Array.isArray(parsed.frequenciasNotas) ? parsed.frequenciasNotas : INITIAL_FREQUENCIAS_NOTAS);
+        setRastreabilidades(Array.isArray(parsed.rastreabilidades) ? parsed.rastreabilidades : INITIAL_RASTREABILIDADES);
       } else {
         setMultiplicadores(INITIAL_MULTIPLICADORES);
         setCelulas(INITIAL_CELULAS);
@@ -663,6 +675,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setOperadores(INITIAL_OPERADORES);
         setTabulador(INITIAL_TABULADOR);
         setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
+        setRastreabilidades(INITIAL_RASTREABILIDADES);
       }
 
       const fbSaved = localStorage.getItem('td_callcenter_firebase_config');
@@ -707,6 +720,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     operadores: OperadorQuadro[];
     tabulador: AlinhamentoTabulador[];
     frequenciasNotas?: ItemFrequenciaNota[];
+    rastreabilidades?: CronogramaRastreabilidade[];
   }) => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
@@ -1847,6 +1861,119 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteItemFromFirestore('frequencias_notas', id, activeConfig);
   }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, firebaseConfig, markItemDeleted, persistAndNotify]);
 
+  // --- Ações de Rastreabilidade (Cronograma de Treinamento) ---
+  const addRastreabilidade = useCallback((itemData: Omit<CronogramaRastreabilidade, 'id' | 'criadoEm'>): CronogramaRastreabilidade => {
+    const newItem: CronogramaRastreabilidade = {
+      ...itemData,
+      id: `rast-${Date.now()}`,
+      criadoEm: new Date().toISOString()
+    };
+    setRastreabilidades(prev => {
+      const nextList = [newItem, ...prev];
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades: nextList });
+      return nextList;
+    });
+    attemptSaveItem('rastreabilidades', newItem);
+    return newItem;
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, attemptSaveItem, persistAndNotify]);
+
+  const updateRastreabilidade = useCallback((id: string, updates: Partial<CronogramaRastreabilidade>) => {
+    setRastreabilidades(prev => {
+      let updatedItem: CronogramaRastreabilidade | null = null;
+      const nextList = prev.map(item => {
+        if (item.id === id) {
+          updatedItem = { ...item, ...updates, atualizadoEm: new Date().toISOString() };
+          return updatedItem;
+        }
+        return item;
+      });
+      if (updatedItem) attemptSaveItem('rastreabilidades', updatedItem);
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades: nextList });
+      return nextList;
+    });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, attemptSaveItem, persistAndNotify]);
+
+  const deleteRastreabilidade = useCallback((id: string) => {
+    const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
+    setRastreabilidades(prev => {
+      const nextList = prev.filter(item => item.id !== id);
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades: nextList });
+      return nextList;
+    });
+    deleteItemFromFirestore('rastreabilidades', id, activeConfig);
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, firebaseConfig, markItemDeleted, persistAndNotify]);
+
+  const addConteudoRastreabilidade = useCallback((cronogramaId: string, itemData: Omit<ItemConteudoRastreabilidade, 'id'>) => {
+    setRastreabilidades(prev => {
+      let updatedItem: CronogramaRastreabilidade | null = null;
+      const nextList = prev.map(c => {
+        if (c.id === cronogramaId) {
+          const nextConteudo: ItemConteudoRastreabilidade = {
+            ...itemData,
+            id: `cnt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
+          };
+          updatedItem = {
+            ...c,
+            conteudos: [...c.conteudos, nextConteudo],
+            atualizadoEm: new Date().toISOString()
+          };
+          return updatedItem;
+        }
+        return c;
+      });
+      if (updatedItem) attemptSaveItem('rastreabilidades', updatedItem);
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades: nextList });
+      return nextList;
+    });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, attemptSaveItem, persistAndNotify]);
+
+  const updateConteudoRastreabilidade = useCallback((cronogramaId: string, itemConteudoId: string, updates: Partial<ItemConteudoRastreabilidade>) => {
+    setRastreabilidades(prev => {
+      let updatedItem: CronogramaRastreabilidade | null = null;
+      const nextList = prev.map(c => {
+        if (c.id === cronogramaId) {
+          const nextConteudos = c.conteudos.map(cnt => {
+            if (cnt.id === itemConteudoId) {
+              return { ...cnt, ...updates };
+            }
+            return cnt;
+          });
+          updatedItem = {
+            ...c,
+            conteudos: nextConteudos,
+            atualizadoEm: new Date().toISOString()
+          };
+          return updatedItem;
+        }
+        return c;
+      });
+      if (updatedItem) attemptSaveItem('rastreabilidades', updatedItem);
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades: nextList });
+      return nextList;
+    });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, attemptSaveItem, persistAndNotify]);
+
+  const deleteConteudoRastreabilidade = useCallback((cronogramaId: string, itemConteudoId: string) => {
+    setRastreabilidades(prev => {
+      let updatedItem: CronogramaRastreabilidade | null = null;
+      const nextList = prev.map(c => {
+        if (c.id === cronogramaId) {
+          updatedItem = {
+            ...c,
+            conteudos: c.conteudos.filter(cnt => cnt.id !== itemConteudoId),
+            atualizadoEm: new Date().toISOString()
+          };
+          return updatedItem;
+        }
+        return c;
+      });
+      if (updatedItem) attemptSaveItem('rastreabilidades', updatedItem);
+      persistAndNotify({ multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, rastreabilidades: nextList });
+      return nextList;
+    });
+  }, [multiplicadores, celulas, salas, demandas, turmas, operadores, tabulador, frequenciasNotas, attemptSaveItem, persistAndNotify]);
+
   const resetToInitialData = () => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     setMultiplicadores(INITIAL_MULTIPLICADORES);
@@ -1923,6 +2050,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         operadores,
         tabulador,
         frequenciasNotas,
+        rastreabilidades,
+        addRastreabilidade,
+        updateRastreabilidade,
+        deleteRastreabilidade,
+        addConteudoRastreabilidade,
+        updateConteudoRastreabilidade,
+        deleteConteudoRastreabilidade,
         selectedDate,
         setSelectedDate,
         activeTab,

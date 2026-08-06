@@ -10,6 +10,7 @@ import {
   BarChart3,
   ClipboardList,
   GraduationCap,
+  FileSpreadsheet,
   Users,
   ShieldCheck,
   ChevronLeft,
@@ -33,6 +34,7 @@ export const Sidebar: React.FC = () => {
     salas, 
     tabulador, 
     operadores,
+    rastreabilidades = [],
     forceSaveToCloud,
     forceReloadFromCloud,
     isSaving,
@@ -117,6 +119,16 @@ export const Sidebar: React.FC = () => {
       label: 'Frequências e Notas',
       icon: GraduationCap,
       badge: null
+    },
+    {
+      id: 'rastreabilidade',
+      label: 'Rastreabilidade',
+      icon: FileSpreadsheet,
+      badge: (
+        <span className="text-slate-400 dark:text-slate-500 text-[10px] font-mono">
+          {rastreabilidades.length}
+        </span>
+      )
     },
     {
       id: 'quadro',

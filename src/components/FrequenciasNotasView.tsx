@@ -24,11 +24,43 @@ import {
   Save,
   UserPlus,
   PlusCircle,
-  CloudOff
+  CloudOff,
+  Zap,
+  Check,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ItemFrequenciaNota, AlunoFrequenciaNota, PresencaDiariaItem } from '../types';
+import { ItemFrequenciaNota, AlunoFrequenciaNota, PresencaDiariaItem, ItemProvaNota, DossieOperador } from '../types';
 import { PasswordConfirmModal } from './PasswordConfirmModal';
+import { AlunoPresencaCalendarModal } from './AlunoPresencaCalendarModal';
+import { AlunoNotasModal } from './AlunoNotasModal';
+import { AlunoDossieModal } from './AlunoDossieModal';
+
+const parseLocalDate = (dateStr?: string): Date => {
+  if (!dateStr) return new Date();
+  const clean = dateStr.trim();
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m, d);
+    }
+  }
+  if (clean.includes('-')) {
+    const parts = clean.split('T')[0].split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m, d);
+    }
+  }
+  const parsed = new Date(clean);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
 
 export const FrequenciasNotasView: React.FC = () => {
   const { 
@@ -40,7 +72,8 @@ export const FrequenciasNotasView: React.FC = () => {
     celulas, 
     multiplicadores, 
     operadores,
-    isItemPendingSync
+    isItemPendingSync,
+    setActiveTab
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,15 +83,35 @@ export const FrequenciasNotasView: React.FC = () => {
   const [activeCourse, setActiveCourse] = useState<ItemFrequenciaNota | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
+  // Modals for individual student details
+  const [selectedAlunoCalendar, setSelectedAlunoCalendar] = useState<{ aluno: AlunoFrequenciaNota; course: ItemFrequenciaNota } | null>(null);
+  const [selectedAlunoNotas, setSelectedAlunoNotas] = useState<{ aluno: AlunoFrequenciaNota; course: ItemFrequenciaNota } | null>(null);
+  const [selectedAlunoDossie, setSelectedAlunoDossie] = useState<{ aluno: AlunoFrequenciaNota; course: ItemFrequenciaNota } | null>(null);
+
   // Daily presence expandable grid state inside active course details
   const [isPresencaGridOpen, setIsPresencaGridOpen] = useState(false);
-  const [trainingDaysCount, setTrainingDaysCount] = useState(20);
+  const [trainingDaysCount, setTrainingDaysCount] = useState(25);
   const [dateOffsetIndex, setDateOffsetIndex] = useState(0);
+
+  // Bulk presence entry states
+  const [selectedBulkDateKey, setSelectedBulkDateKey] = useState<string>('');
+  const [bulkHoraExtraInput, setBulkHoraExtraInput] = useState<string>('');
+  const [bulkObsInput, setBulkObsInput] = useState<string>('');
+  const [presenceViewMode, setPresenceViewMode] = useState<'lote' | 'matriz'>('lote');
 
   const [isLancarNotaOpen, setIsLancarNotaOpen] = useState(false);
   const [nomeProvaInput, setNomeProvaInput] = useState('Prova 1');
   const [dataProvaInput, setDataProvaInput] = useState(new Date().toISOString().split('T')[0]);
   const [notaInputMap, setNotaInputMap] = useState<Record<string, number>>({});
+
+  // Edit student list state
+  const [editingAlunos, setEditingAlunos] = useState<AlunoFrequenciaNota[]>([]);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ matDP: string; loginBB: string; nome: string }>({
+    matDP: '',
+    loginBB: '',
+    nome: ''
+  });
 
   // Filtered items
   const filteredItems = useMemo(() => {
@@ -69,13 +122,12 @@ export const FrequenciasNotasView: React.FC = () => {
         item.celulas.some(c => c.toLowerCase().includes(q));
       const matchTipo = selectedTipo === 'todos' || item.tipo === selectedTipo;
 
-      // Month/Year filter matching
       let matchMonth = true;
       let matchYear = true;
 
       const dateStr = item.dataInicio || item.criadoEm;
       if (dateStr) {
-        const d = new Date(dateStr);
+        const d = parseLocalDate(dateStr);
         const hasDate = !isNaN(d.getTime());
         const itemMonth = hasDate ? (d.getMonth() + 1).toString() : '';
         const itemYear = hasDate ? d.getFullYear().toString() : '';
@@ -127,19 +179,13 @@ export const FrequenciasNotasView: React.FC = () => {
     return { totalCursos, totalAlunos, mediaFreq, mediaNota, taxaAprovacao };
   }, [filteredItems]);
 
-  // Edit student grades in active course modal
-  const [editingAlunos, setEditingAlunos] = useState<AlunoFrequenciaNota[]>([]);
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<{ matDP: string; loginBB: string; nome: string }>({
-    matDP: '',
-    loginBB: '',
-    nome: ''
-  });
-
+  // Generate course dates aligned strictly with course dataInicio
   const generatedDates = useMemo(() => {
     if (!activeCourse) return [];
-    const start = activeCourse.dataInicio ? new Date(activeCourse.dataInicio) : new Date();
-    const dates: { fullDate: string; label: string }[] = [];
+    const start = parseLocalDate(activeCourse.dataInicio);
+    const dates: { fullDate: string; label: string; dayOfWeek: string; formattedFull: string }[] = [];
+    const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
     for (let i = 0; i < trainingDaysCount; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
@@ -148,7 +194,9 @@ export const FrequenciasNotasView: React.FC = () => {
       const dd = String(d.getDate()).padStart(2, '0');
       const dateStr = `${yyyy}-${mm}-${dd}`;
       const label = `${dd}/${mm}`;
-      dates.push({ fullDate: dateStr, label });
+      const dayOfWeek = daysOfWeek[d.getDay()];
+      const formattedFull = `${dd}/${mm}/${yyyy} (${dayOfWeek})`;
+      dates.push({ fullDate: dateStr, label, dayOfWeek, formattedFull });
     }
     return dates;
   }, [activeCourse, trainingDaysCount]);
@@ -163,6 +211,13 @@ export const FrequenciasNotasView: React.FC = () => {
     setEditingRowId(null);
     setIsPresencaGridOpen(false);
     setDateOffsetIndex(0);
+
+    // Initialize bulk selected date to course dataInicio
+    const start = parseLocalDate(course.dataInicio);
+    const yyyy = start.getFullYear();
+    const mm = String(start.getMonth() + 1).padStart(2, '0');
+    const dd = String(start.getDate()).padStart(2, '0');
+    setSelectedBulkDateKey(`${yyyy}-${mm}-${dd}`);
   };
 
   const handleAddOperatorRow = () => {
@@ -217,7 +272,6 @@ export const FrequenciasNotasView: React.FC = () => {
     setEditingAlunos(prev => prev.map(a => {
       if (a.id === id) {
         const updated = { ...a, [field]: val };
-        // Recalculate status for 0-10 grade scale
         const freq = typeof updated.frequenciaPercent === 'number' ? updated.frequenciaPercent : 0;
         const nota = typeof updated.notaFinal === 'number' ? updated.notaFinal : 0;
         if (freq >= 85 && nota >= 7.0) {
@@ -246,11 +300,11 @@ export const FrequenciasNotasView: React.FC = () => {
         const updatedItem = { ...currentItem, [field]: value };
         const updatedDiario = { ...currentDiario, [dateKey]: updatedItem };
 
-        // Recalculate frequency % based on 'P' vs total recorded entries
+        // Recalculate frequency % (DSR, BH, FERIADO, DAY OFF, etc. do NOT lower frequency)
         const entries = Object.values(updatedDiario) as PresencaDiariaItem[];
         const filledEntries = entries.filter(e => e.frequencia && e.frequencia !== '');
         const totalDays = filledEntries.length;
-        const presentDays = filledEntries.filter(e => e.frequencia === 'P').length;
+        const presentDays = filledEntries.filter(e => e.frequencia !== 'FI' && e.frequencia !== 'FJ').length;
         const newFreqPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : a.frequenciaPercent;
 
         let status = a.statusAprovacao;
@@ -266,6 +320,61 @@ export const FrequenciasNotasView: React.FC = () => {
         };
       }
       return a;
+    }));
+  };
+
+  // Bulk Apply presence status to ALL operators for the selected date
+  const handleBulkApplyPresence = (dateKey: string, status: string) => {
+    if (!dateKey) return;
+    setEditingAlunos(prev => prev.map(a => {
+      const currentDiario = a.presencaDiaria || {};
+      const currentItem = currentDiario[dateKey] || { frequencia: '', horaExtra: '', obs: '' };
+      const updatedItem = { ...currentItem, frequencia: status };
+      const updatedDiario = { ...currentDiario, [dateKey]: updatedItem };
+
+      const entries = Object.values(updatedDiario) as PresencaDiariaItem[];
+      const filledEntries = entries.filter(e => e.frequencia && e.frequencia !== '');
+      const totalDays = filledEntries.length;
+      const presentDays = filledEntries.filter(e => e.frequencia !== 'FI' && e.frequencia !== 'FJ').length;
+      const newFreqPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : a.frequenciaPercent;
+
+      let statusAp = a.statusAprovacao;
+      if (newFreqPercent < 75 || a.notaFinal < 5.0) statusAp = 'Reprovado';
+      else if (newFreqPercent >= 85 && a.notaFinal >= 7.0) statusAp = 'Aprovado';
+      else statusAp = 'Em Andamento';
+
+      return {
+        ...a,
+        presencaDiaria: updatedDiario,
+        frequenciaPercent: newFreqPercent,
+        statusAprovacao: statusAp
+      };
+    }));
+  };
+
+  const handleBulkApplyHoraExtra = (dateKey: string, horaExtra: string) => {
+    if (!dateKey) return;
+    setEditingAlunos(prev => prev.map(a => {
+      const currentDiario = a.presencaDiaria || {};
+      const currentItem = currentDiario[dateKey] || { frequencia: '', horaExtra: '', obs: '' };
+      const updatedItem = { ...currentItem, horaExtra };
+      return {
+        ...a,
+        presencaDiaria: { ...currentDiario, [dateKey]: updatedItem }
+      };
+    }));
+  };
+
+  const handleBulkApplyObs = (dateKey: string, obs: string) => {
+    if (!dateKey) return;
+    setEditingAlunos(prev => prev.map(a => {
+      const currentDiario = a.presencaDiaria || {};
+      const currentItem = currentDiario[dateKey] || { frequencia: '', horaExtra: '', obs: '' };
+      const updatedItem = { ...currentItem, obs };
+      return {
+        ...a,
+        presencaDiaria: { ...currentDiario, [dateKey]: updatedItem }
+      };
     }));
   };
 
@@ -289,23 +398,73 @@ export const FrequenciasNotasView: React.FC = () => {
     setEditingAlunos(prev => prev.map(aluno => {
       const notaDigitada = notaInputMap[aluno.id];
       if (typeof notaDigitada === 'number' && !isNaN(notaDigitada)) {
-        // Compute average between existing final grade and new test grade
         const novaNotaFinal = Math.round(((aluno.notaFinal + notaDigitada) / 2) * 10) / 10;
         const freq = aluno.frequenciaPercent;
         let status: 'Aprovado' | 'Reprovado' | 'Em Andamento' = 'Aprovado';
         if (freq < 75 || novaNotaFinal < 5.0) status = 'Reprovado';
         else if (freq < 85 || novaNotaFinal < 7.0) status = 'Em Andamento';
 
+        const novasProvas = [...(aluno.provas || [])];
+        novasProvas.push({
+          id: `prv-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+          nomeProva: nomeProvaInput || 'Avaliação',
+          dataProva: dataProvaInput ? new Date(dataProvaInput).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+          nota: notaDigitada
+        });
+
         return {
           ...aluno,
           notaFinal: novaNotaFinal,
-          statusAprovacao: status
+          statusAprovacao: status,
+          provas: novasProvas
         };
       }
       return aluno;
     }));
     setIsLancarNotaOpen(false);
     setNotaInputMap({});
+  };
+
+  const handleUpdateProvasFromModal = (alunoId: string, novasProvas: ItemProvaNota[], novaNotaFinal: number) => {
+    setEditingAlunos(prev => prev.map(a => {
+      if (a.id === alunoId) {
+        const freq = a.frequenciaPercent;
+        let status: 'Aprovado' | 'Reprovado' | 'Em Andamento' = 'Aprovado';
+        if (freq < 75 || novaNotaFinal < 5.0) status = 'Reprovado';
+        else if (freq < 85 || novaNotaFinal < 7.0) status = 'Em Andamento';
+
+        return {
+          ...a,
+          provas: novasProvas,
+          notaFinal: novaNotaFinal,
+          statusAprovacao: status
+        };
+      }
+      return a;
+    }));
+
+    // If viewing outside active course, update course state directly
+    if (selectedAlunoNotas && selectedAlunoNotas.course) {
+      const targetCourse = items.find(c => c.id === selectedAlunoNotas.course.id);
+      if (targetCourse) {
+        const updatedAlunos = targetCourse.alunos.map(a => {
+          if (a.id === alunoId) {
+            const freq = a.frequenciaPercent;
+            let status: 'Aprovado' | 'Reprovado' | 'Em Andamento' = 'Aprovado';
+            if (freq < 75 || novaNotaFinal < 5.0) status = 'Reprovado';
+            else if (freq < 85 || novaNotaFinal < 7.0) status = 'Em Andamento';
+            return {
+              ...a,
+              provas: novasProvas,
+              notaFinal: novaNotaFinal,
+              statusAprovacao: status
+            };
+          }
+          return a;
+        });
+        updateFrequenciaNota(targetCourse.id, { alunos: updatedAlunos });
+      }
+    }
   };
 
   const handleSaveCourseChanges = () => {
@@ -316,25 +475,94 @@ export const FrequenciasNotasView: React.FC = () => {
     setActiveCourse(null);
   };
 
+  const handleSaveDossie = (alunoId: string, dossie: DossieOperador) => {
+    setEditingAlunos(prev => prev.map(a => a.id === alunoId ? { ...a, dossie } : a));
+    
+    if (selectedAlunoDossie) {
+      const targetCourseId = selectedAlunoDossie.course.id;
+      const targetCourse = items.find(c => c.id === targetCourseId);
+      if (targetCourse) {
+        const updatedAlunos = targetCourse.alunos.map(a => a.id === alunoId ? { ...a, dossie } : a);
+        updateFrequenciaNota(targetCourse.id, { alunos: updatedAlunos });
+      }
+      setSelectedAlunoDossie(prev => prev ? { ...prev, aluno: { ...prev.aluno, dossie } } : null);
+    }
+  };
+
   const handleExportCSV = (course: ItemFrequenciaNota) => {
-    const headers = ['MAT_DP', 'LOGIN_BB', 'NOME', 'SUPERVISOR', 'GERENTE', 'CELULA', 'FREQUENCIA_%', 'NOTA_FINAL', 'STATUS'];
-    const rows = course.alunos.map(a => [
-      `"${a.matDP}"`,
-      `"${a.loginBB}"`,
-      `"${a.nome.replace(/"/g, '""')}"`,
-      `"${a.supervisor.replace(/"/g, '""')}"`,
-      `"${a.gerente.replace(/"/g, '""')}"`,
-      `"${a.celula.replace(/"/g, '""')}"`,
-      `${a.frequenciaPercent}%`,
-      `${a.notaFinal}`,
-      `"${a.statusAprovacao}"`
-    ]);
+    // Generate dates list for daily presence headers
+    const start = course.dataInicio ? new Date(course.dataInicio) : new Date();
+    const datesList: string[] = [];
+    for (let i = 0; i < 25; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      datesList.push(`${yyyy}-${mm}-${dd}`);
+    }
+
+    const headers = [
+      'MAT_DP',
+      'LOGIN_BB',
+      'NOME',
+      'SUPERVISOR',
+      'GERENTE',
+      'CELULA',
+      'FREQUENCIA_%',
+      'NOTA_FINAL',
+      'STATUS_APROVACAO',
+      'FOTO_DOSSIE_REGISTRADA',
+      'DOSSIE_PLATAFORMA_BB',
+      'DOSSIE_SISBB',
+      'DOSSIE_DOMINIO_COMPUTADOR',
+      'DOSSIE_OBS_TECNICO',
+      'DOSSIE_FLUENCIA_VERBAL',
+      'DOSSIE_CORDIALIDADE',
+      'DOSSIE_RELACIONAMENTO_INTERPESSOAL',
+      'DOSSIE_PONTUALIDADE',
+      'DOSSIE_OBS_COMPORTAMENTO',
+      'DOSSIE_OUTRAS_CONSIDERACOES',
+      'HISTORICO_PROVAS',
+      ...datesList.map(d => `FREQ_${d}`)
+    ];
+
+    const rows = course.alunos.map(a => {
+      const dossie = a.dossie || {};
+      const provasStr = (a.provas || []).map(p => `${p.nomeProva}: ${p.nota}`).join(' | ');
+      const freqCols = datesList.map(d => a.presencaDiaria?.[d]?.frequencia || '');
+
+      return [
+        `"${a.matDP}"`,
+        `"${a.loginBB}"`,
+        `"${a.nome.replace(/"/g, '""')}"`,
+        `"${a.supervisor.replace(/"/g, '""')}"`,
+        `"${a.gerente.replace(/"/g, '""')}"`,
+        `"${a.celula.replace(/"/g, '""')}"`,
+        `${a.frequenciaPercent}%`,
+        `${a.notaFinal}`,
+        `"${a.statusAprovacao}"`,
+        `"${dossie.fotoUrl ? 'SIM' : 'NÃO'}"`,
+        `"${dossie.plataformaBB || ''}"`,
+        `"${dossie.sisbb || ''}"`,
+        `"${dossie.dominioComputador || ''}"`,
+        `"${(dossie.obsTecnico || '').replace(/"/g, '""')}"`,
+        `"${dossie.fluenciaVerbal || ''}"`,
+        `"${dossie.cordialidade || ''}"`,
+        `"${dossie.relacionamentoInterpessoal || ''}"`,
+        `"${dossie.pontualidade || ''}"`,
+        `"${(dossie.obsComportamento || '').replace(/"/g, '""')}"`,
+        `"${(dossie.outrasConsideracoes || '').replace(/"/g, '""')}"`,
+        `"${provasStr.replace(/"/g, '""')}"`,
+        ...freqCols.map(f => `"${f}"`)
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `boletim_${course.treinamento.replace(/\s+/g, '_')}.csv`);
+    link.setAttribute('download', `dossie_boletim_${course.treinamento.replace(/\s+/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -528,6 +756,15 @@ export const FrequenciasNotasView: React.FC = () => {
 
                 <div className="flex items-center space-x-2 self-end md:self-center">
                   <button
+                    onClick={() => setActiveTab('rastreabilidade')}
+                    className="flex items-center space-x-1 px-3 py-1.5 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-xl text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors"
+                    title="Ver Cronograma e Rastreabilidade do Treinamento"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                    <span>Rastreabilidade</span>
+                  </button>
+
+                  <button
                     onClick={() => handleExportCSV(course)}
                     className="flex items-center space-x-1 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                   >
@@ -553,7 +790,7 @@ export const FrequenciasNotasView: React.FC = () => {
                 </div>
               </div>
 
-              {/* COURSE QUICK METRICS */}
+              {/* COURSE QUICK METRICS & OPERATORS LIST SNAPSHOT */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl">
                 <div>
                   <span className="text-slate-400 text-[10px] uppercase font-bold block">Convocados</span>
@@ -574,6 +811,53 @@ export const FrequenciasNotasView: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              {/* QUICK OPERATOR CHIPS (CLICK FREQ OR GRADE TO OPEN MODAL) */}
+              <div className="pt-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  Boletim dos Operadores (Clique no % para Calendário ou na Nota para Provas):
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {course.alunos.map(aluno => (
+                    <div 
+                      key={aluno.id}
+                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 flex items-center space-x-2 text-xs shadow-2xs"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900 dark:text-white block truncate max-w-[140px] text-[11px]">
+                          {aluno.nome}
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-400">
+                          {aluno.loginBB || aluno.matDP}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-1 pl-1 border-l border-slate-100 dark:border-slate-700">
+                        {/* CLICKABLE FREQUENCY % */}
+                        <button
+                          onClick={() => setSelectedAlunoCalendar({ aluno, course })}
+                          className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-extrabold text-[10px] hover:bg-emerald-100 transition-colors flex items-center space-x-1"
+                          title="Clique para abrir Calendário de Frequência"
+                        >
+                          <Calendar className="w-2.5 h-2.5" />
+                          <span>{aluno.frequenciaPercent}%</span>
+                        </button>
+
+                        {/* CLICKABLE GRADE */}
+                        <button
+                          onClick={() => setSelectedAlunoNotas({ aluno, course })}
+                          className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-extrabold text-[10px] hover:bg-amber-100 transition-colors flex items-center space-x-1"
+                          title="Clique para ver Provas e Avaliações"
+                        >
+                          <Award className="w-2.5 h-2.5" />
+                          <span>{aluno.notaFinal}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           );
         })}
@@ -590,16 +874,19 @@ export const FrequenciasNotasView: React.FC = () => {
       {/* EDIT COURSE FREQUENCY AND GRADES MODAL */}
       {activeCourse && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-5xl w-full border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-6xl w-full border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                  Boletim de Frequência & Notas
+                  Boletim de Frequência & Notas • {activeCourse.tipo}
                 </span>
                 <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                   {activeCourse.treinamento}
                 </h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Data de Início oficial: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{activeCourse.dataInicio}</strong> • Término: {activeCourse.dataFim}
+                </p>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -616,22 +903,32 @@ export const FrequenciasNotasView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsPresencaGridOpen(prev => !prev)}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors ${
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs ${
                     isPresencaGridOpen ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
                   title="Abrir/fechar lançamento de presença diária"
                 >
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>{isPresencaGridOpen ? 'Fechar Presença' : 'Lançar Presença'}</span>
+                  <span>{isPresencaGridOpen ? 'Ocultar Lançamento Diário' : 'Lançar Presença Diária'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsLancarNotaOpen(true)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
                 >
                   <Award className="w-3.5 h-3.5" />
-                  <span>Lançar Nota</span>
+                  <span>Lançar Prova / Nota</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportCSV({ ...activeCourse, alunos: editingAlunos })}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                  title="Exportar planilha completa da turma com Dossiê, Frequência Diária e Notas"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Exportar Dossiê & Boletim</span>
                 </button>
 
                 <button
@@ -643,50 +940,183 @@ export const FrequenciasNotasView: React.FC = () => {
               </div>
             </div>
 
-            {/* DAILY PRESENCE 10-DAY NAVIGATION BAR */}
+            {/* UNPOLLUTED DAILY PRESENCE ENTRY & BULK FILL BAR */}
             {isPresencaGridOpen && (
-              <div className="p-2.5 bg-indigo-50/90 dark:bg-slate-800/90 rounded-xl border border-indigo-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>Lançamento Diário de Presença (10 dias por visualização)</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
-                    Exibindo dias {dateOffsetIndex + 1} a {Math.min(dateOffsetIndex + 10, generatedDates.length)} de {generatedDates.length}
+              <div className="bg-gradient-to-r from-indigo-900 via-indigo-850 to-slate-900 rounded-2xl p-4 text-white shadow-md border border-indigo-700/60 space-y-3">
+                
+                {/* TOP CONTROL BAR: DATE SELECTOR & BULK FILL BUTTON */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-indigo-700/50">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-amber-300 flex items-center space-x-1">
+                      <Calendar className="w-4 h-4" />
+                      <span>Data do Lançamento:</span>
+                    </span>
+
+                    <select
+                      value={selectedBulkDateKey}
+                      onChange={(e) => setSelectedBulkDateKey(e.target.value)}
+                      className="px-3 py-1.5 bg-slate-800 border border-indigo-500/60 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-amber-400"
+                    >
+                      {generatedDates.map(d => (
+                        <option key={d.fullDate} value={d.fullDate}>
+                          {d.formattedFull}
+                        </option>
+                      ))}
+                    </select>
+
+                    <span className="text-xs font-extrabold text-amber-300 uppercase tracking-wider px-1">
+                      para todos:
+                    </span>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'P')}
+                        className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black rounded-xl text-xs shadow-md transition-all active:scale-95"
+                        title="Marcar Presença (P) para TODOS"
+                      >
+                        <span>Presença</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FI')}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
+                        title="Marcar Falta Injustificada (FI) para todos"
+                      >
+                        FI
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FJ')}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
+                        title="Marcar Falta Justificada (FJ) para todos"
+                      >
+                        FJ
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'DRS')}
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
+                        title="Marcar DSR para todos"
+                      >
+                        DSR
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'BH')}
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
+                        title="Marcar Banco de Horas (BH) para todos"
+                      >
+                        BH
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FERIADO')}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
+                        title="Marcar Feriado para todos"
+                      >
+                        Feriado
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* MODE SWITCHER (POR DIA / TODO O PERÍODO) */}
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {presenceViewMode === 'matriz' && (
+                      <div className="flex items-center space-x-1.5 bg-slate-800/80 px-2 py-1 rounded-lg border border-indigo-500/40 mr-2">
+                        <span className="text-[10px] text-indigo-200 font-bold">Dias:</span>
+                        <input
+                          type="number"
+                          min={5}
+                          max={90}
+                          value={trainingDaysCount}
+                          onChange={(e) => setTrainingDaysCount(Math.max(1, parseInt(e.target.value) || 25))}
+                          className="w-12 px-1 py-0.5 bg-slate-900 border border-slate-700 rounded text-center text-xs font-extrabold text-amber-300"
+                          title="Quantidade total de dias do treinamento"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setTrainingDaysCount(prev => prev + 5)}
+                          className="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold"
+                          title="Acrescentar +5 dias de treinamento"
+                        >
+                          +5d
+                        </button>
+                      </div>
+                    )}
+
+                    <span className="text-[11px] text-indigo-200 font-medium">Visualização:</span>
+                    <button
+                      type="button"
+                      onClick={() => setPresenceViewMode('lote')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        presenceViewMode === 'lote' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-800 text-indigo-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      📋 Por dia
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPresenceViewMode('matriz')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        presenceViewMode === 'matriz' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-800 text-indigo-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      📊 Todo o Período
+                    </button>
+                  </div>
+                </div>
+
+                {/* BULK HORA EXTRA & OBS INPUTS */}
+                <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-indigo-950/60 p-2.5 rounded-xl border border-indigo-700/40">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-bold text-indigo-200">Hora Extra em Lote:</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: 01:00"
+                        value={bulkHoraExtraInput}
+                        onChange={(e) => setBulkHoraExtraInput(e.target.value)}
+                        className="w-24 px-2 py-1 bg-slate-900 border border-indigo-500/50 rounded-lg text-white font-mono text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyHoraExtra(selectedBulkDateKey, bulkHoraExtraInput)}
+                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors"
+                      >
+                        Aplicar HE
+                      </button>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-bold text-indigo-200">Obs em Lote:</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: Sala 3 / SARB"
+                        value={bulkObsInput}
+                        onChange={(e) => setBulkObsInput(e.target.value)}
+                        className="w-40 px-2 py-1 bg-slate-900 border border-indigo-500/50 rounded-lg text-white text-xs font-medium"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleBulkApplyObs(selectedBulkDateKey, bulkObsInput)}
+                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors"
+                      >
+                        Aplicar Obs
+                      </button>
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] text-amber-300/90 italic">
+                    💡 Dica: Clique em "Lançar Presença (P) para Todos", e depois altere somente quem faltou!
                   </span>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    disabled={dateOffsetIndex === 0}
-                    onClick={() => setDateOffsetIndex(prev => Math.max(0, prev - 10))}
-                    className="flex items-center space-x-1 px-2.5 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-[11px] font-bold disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
-                    title="Ver 10 dias anteriores"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    <span>Anterior</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={dateOffsetIndex + 10 >= generatedDates.length}
-                    onClick={() => setDateOffsetIndex(prev => Math.min(generatedDates.length - 10, prev + 10))}
-                    className="flex items-center space-x-1 px-2.5 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-[11px] font-bold disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
-                    title="Ver próximos 10 dias"
-                  >
-                    <span>Próximo</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTrainingDaysCount(prev => prev + 10)}
-                    className="flex items-center space-x-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-bold transition-colors shadow-2xs"
-                    title="Estender o treinamento em +10 dias"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>+ 10 Dias</span>
-                  </button>
-                </div>
               </div>
             )}
 
@@ -695,14 +1125,39 @@ export const FrequenciasNotasView: React.FC = () => {
               <table className="w-full text-left text-[10px] whitespace-nowrap">
                 <thead className="bg-slate-800 text-white font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="p-1.5 border-r border-slate-700 w-32">MATRÍCULA DP</th>
-                    <th className="p-1.5 border-r border-slate-700 w-32">LOGIN BB</th>
-                    <th className="p-1.5 border-r border-slate-700 min-w-[200px]">NOME OPERADOR</th>
-                    <th className="p-1.5 border-r border-slate-700 min-w-[150px]">OBSERVAÇÃO</th>
-                    <th className="p-1.5 text-center border-r border-slate-700 w-28">FREQUÊNCIA (%)</th>
-                    <th className="p-1.5 text-center border-r border-slate-700 w-36">MÉDIA DAS NOTAS (0-10)</th>
-                    <th className="p-1.5 text-center border-r border-slate-700 w-28">STATUS APROVAÇÃO</th>
-                    <th className="p-1.5 text-center w-28">AÇÃO</th>
+                    <th className="p-2 border-r border-slate-700 w-28">MATRÍCULA DP</th>
+                    <th className="p-2 border-r border-slate-700 w-28">LOGIN BB</th>
+                    <th className="p-2 border-r border-slate-700 min-w-[200px]">NOME OPERADOR</th>
+
+                    {/* IF PRESENCE OPEN IN LOTE MODE: DISPLAY SPECIFIC SELECTED DATE COLUMNS */}
+                    {isPresencaGridOpen && presenceViewMode === 'lote' && (
+                      <>
+                        <th className="p-2 text-center border-r border-slate-700 bg-indigo-900 text-amber-300 min-w-[220px]">
+                          FREQUÊNCIA NO DIA ({generatedDates.find(d => d.fullDate === selectedBulkDateKey)?.label || 'HOJE'})
+                        </th>
+                        <th className="p-2 text-center border-r border-slate-700 w-24">HORA EXTRA</th>
+                        <th className="p-2 border-r border-slate-700 min-w-[140px]">OBS. DO DIA</th>
+                      </>
+                    )}
+
+                    {/* IF PRESENCE OPEN IN MATRIZ MODE (TODO O PERÍODO): DISPLAY ALL GENERATED DATE HEADERS */}
+                    {isPresencaGridOpen && presenceViewMode === 'matriz' && (
+                      generatedDates.map(d => (
+                        <th key={`hdr-${d.fullDate}`} className="p-1 text-center border-r border-slate-700 min-w-[55px] bg-slate-900 text-amber-300">
+                          <div>{d.label}</div>
+                          <div className="text-[8px] font-normal text-slate-400">{d.dayOfWeek}</div>
+                        </th>
+                      ))
+                    )}
+
+                    {!isPresencaGridOpen && (
+                      <th className="p-2 border-r border-slate-700 min-w-[150px]">OBSERVAÇÃO GERAL</th>
+                    )}
+
+                    <th className="p-2 text-center border-r border-slate-700 w-28">FREQUÊNCIA (%)</th>
+                    <th className="p-2 text-center border-r border-slate-700 w-36">MÉDIA DAS NOTAS (0-10)</th>
+                    <th className="p-2 text-center border-r border-slate-700 w-28">STATUS APROVAÇÃO</th>
+                    <th className="p-2 text-center w-28">AÇÃO</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-normal">
@@ -717,61 +1172,194 @@ export const FrequenciasNotasView: React.FC = () => {
                       displayMat = tmp;
                     }
 
+                    const currentDiarioItem = aluno.presencaDiaria?.[selectedBulkDateKey] || { frequencia: '', horaExtra: '', obs: '' };
+
                     return (
-                      <React.Fragment key={aluno.id}>
-                        <tr className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/50">
-                          {/* MATRÍCULA DP */}
-                          <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
-                            {isEditing ? (
+                      <tr key={aluno.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/50">
+                        {/* MATRÍCULA DP */}
+                        <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft.matDP}
+                              onChange={(e) => setEditDraft(prev => ({ ...prev, matDP: e.target.value }))}
+                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs font-semibold focus:outline-none"
+                              placeholder="Matrícula"
+                            />
+                          ) : (
+                            <span className="font-mono text-slate-600 dark:text-slate-400">
+                              {displayMat || 'N/A'}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* LOGIN BB */}
+                        <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft.loginBB}
+                              onChange={(e) => setEditDraft(prev => ({ ...prev, loginBB: e.target.value }))}
+                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 font-mono text-xs font-bold focus:outline-none"
+                              placeholder="Login BB"
+                            />
+                          ) : (
+                            <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                              {displayLogin || 'N/A'}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* NOME OPERADOR */}
+                        <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft.nome}
+                              onChange={(e) => setEditDraft(prev => ({ ...prev, nome: e.target.value }))}
+                              className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none"
+                              placeholder="Nome do Operador"
+                            />
+                          ) : (
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {aluno.nome}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* MODE 1: LOTE (FOCUSED SINGLE-DATE COLUMNS FOR EASY TOGGLING) */}
+                        {isPresencaGridOpen && presenceViewMode === 'lote' && (
+                          <>
+                            {/* FREQUÊNCIA PILLS */}
+                            <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
+                              <div className="flex items-center space-x-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'frequencia', 'P')}
+                                  className={`px-2 py-1 rounded text-[10px] font-black transition-all ${
+                                    currentDiarioItem.frequencia === 'P' 
+                                      ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-400' 
+                                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-emerald-100'
+                                  }`}
+                                  title="Presente"
+                                >
+                                  P
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'frequencia', 'FI')}
+                                  className={`px-2 py-1 rounded text-[10px] font-black transition-all ${
+                                    currentDiarioItem.frequencia === 'FI' 
+                                      ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400' 
+                                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-rose-100'
+                                  }`}
+                                  title="Falta Injustificada"
+                                >
+                                  FI
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'frequencia', 'FJ')}
+                                  className={`px-2 py-1 rounded text-[10px] font-black transition-all ${
+                                    currentDiarioItem.frequencia === 'FJ' 
+                                      ? 'bg-amber-600 text-white shadow-xs ring-2 ring-amber-400' 
+                                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-amber-100'
+                                  }`}
+                                  title="Falta Justificada"
+                                >
+                                  FJ
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'frequencia', 'DRS')}
+                                  className={`px-2 py-1 rounded text-[10px] font-black transition-all ${
+                                    currentDiarioItem.frequencia === 'DRS' || currentDiarioItem.frequencia === 'DSR'
+                                      ? 'bg-slate-700 text-white shadow-xs ring-2 ring-slate-400' 
+                                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200'
+                                  }`}
+                                  title="DSR / Descanso Semanal Remunerado"
+                                >
+                                  DSR
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'frequencia', 'BH')}
+                                  className={`px-2 py-1 rounded text-[10px] font-black transition-all ${
+                                    currentDiarioItem.frequencia === 'BH' 
+                                      ? 'bg-slate-700 text-white shadow-xs ring-2 ring-slate-400' 
+                                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200'
+                                  }`}
+                                  title="Banco de Horas"
+                                >
+                                  BH
+                                </button>
+
+                                <select
+                                  value={currentDiarioItem.frequencia || ''}
+                                  onChange={(e) => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'frequencia', e.target.value)}
+                                  className="py-1 px-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-bold text-slate-700 dark:text-slate-300"
+                                >
+                                  <option value="">Mais...</option>
+                                  <option value="DAY OFF">DAY OFF (Aniversário)</option>
+                                  <option value="TO">TO</option>
+                                </select>
+                              </div>
+                            </td>
+
+                            {/* HORA EXTRA */}
+                            <td className="p-1 border-r border-slate-100 dark:border-slate-800">
                               <input
                                 type="text"
-                                value={editDraft.matDP}
-                                onChange={(e) => setEditDraft(prev => ({ ...prev, matDP: e.target.value }))}
-                                className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                placeholder="Matrícula DP"
+                                placeholder="00:00"
+                                value={currentDiarioItem.horaExtra || ''}
+                                onChange={(e) => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'horaExtra', e.target.value)}
+                                className="w-full text-center py-1 px-1 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-[10px] focus:ring-1 focus:ring-indigo-500"
                               />
-                            ) : (
-                              <span className="font-mono text-slate-600 dark:text-slate-400">
-                                {displayMat || 'N/A'}
-                              </span>
-                            )}
-                          </td>
+                            </td>
 
-                          {/* LOGIN BB */}
-                          <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
-                            {isEditing ? (
+                            {/* OBSERVAÇÃO DO DIA */}
+                            <td className="p-1 border-r border-slate-100 dark:border-slate-800">
                               <input
                                 type="text"
-                                value={editDraft.loginBB}
-                                onChange={(e) => setEditDraft(prev => ({ ...prev, loginBB: e.target.value }))}
-                                className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 font-mono text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                placeholder="Login BB"
+                                placeholder="Obs do dia..."
+                                value={currentDiarioItem.obs || ''}
+                                onChange={(e) => handleUpdateDailyRecord(aluno.id, selectedBulkDateKey, 'obs', e.target.value)}
+                                className="w-full py-1 px-1.5 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-[10px] font-normal focus:ring-1 focus:ring-indigo-500"
                               />
-                            ) : (
-                              <span className="font-mono font-normal text-indigo-700 dark:text-indigo-400">
-                                {displayLogin || 'N/A'}
-                              </span>
-                            )}
-                          </td>
+                            </td>
+                          </>
+                        )}
 
-                          {/* NOME OPERADOR */}
-                          <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editDraft.nome}
-                                onChange={(e) => setEditDraft(prev => ({ ...prev, nome: e.target.value }))}
-                                className="w-full px-2 py-1 border border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                placeholder="Nome do Operador"
-                              />
-                            ) : (
-                              <span className="font-normal text-slate-900 dark:text-white">
-                                {aluno.nome}
-                              </span>
-                            )}
-                          </td>
+                        {/* MODE 2: MATRIZ (TODO O PERÍODO: EXIBE TODOS OS DIAS DO TREINAMENTO) */}
+                        {isPresencaGridOpen && presenceViewMode === 'matriz' && (
+                          generatedDates.map(d => {
+                            const item = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
+                            return (
+                              <td key={`mat-${d.fullDate}`} className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
+                                <select
+                                  value={item.frequencia || ''}
+                                  onChange={(e) => handleUpdateDailyRecord(aluno.id, d.fullDate, 'frequencia', e.target.value)}
+                                  className={`w-full py-1 text-center font-black rounded border-0 text-[10px] cursor-pointer focus:outline-none ${getStatusStyle(item.frequencia || '')}`}
+                                >
+                                  <option value="" className="bg-white text-slate-400 font-bold">-</option>
+                                  <option value="P" className="bg-white text-slate-900 font-bold">P</option>
+                                  <option value="FI" className="bg-white text-rose-700 font-bold">FI</option>
+                                  <option value="FJ" className="bg-white text-amber-700 font-bold">FJ</option>
+                                  <option value="DRS" className="bg-white text-slate-700 font-bold">DSR</option>
+                                  <option value="BH" className="bg-white text-slate-700 font-bold">BH</option>
+                                  <option value="DAY OFF" className="bg-white text-slate-700 font-bold">DAY OFF</option>
+                                  <option value="FERIADO" className="bg-white text-purple-700 font-bold">FERIADO</option>
+                                </select>
+                              </td>
+                            );
+                          })
+                        )}
 
-                          {/* OBSERVAÇÃO */}
+                        {!isPresencaGridOpen && (
                           <td className="p-1.5 border-r border-slate-100 dark:border-slate-800">
                             <input
                               type="text"
@@ -781,200 +1369,107 @@ export const FrequenciasNotasView: React.FC = () => {
                               className="w-full px-2 py-0.5 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 rounded bg-transparent text-slate-800 dark:text-slate-200 text-[11px] font-medium outline-none"
                             />
                           </td>
-
-                          {/* FREQUÊNCIA (%) */}
-                          <td 
-                            className="p-1 text-center border-r border-slate-100 dark:border-slate-800 cursor-pointer"
-                            onDoubleClick={() => {
-                              const val = prompt('Informe a Frequência % (0-100):', aluno.frequenciaPercent.toString());
-                              if (val !== null) {
-                                handleUpdateStudent(aluno.id, 'frequenciaPercent', parseFloat(val) || 0);
-                              }
-                            }}
-                            title="Duplo clique para editar frequência"
-                          >
-                            <span className="font-mono font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
-                              {aluno.frequenciaPercent}%
-                            </span>
-                          </td>
-
-                          {/* MÉDIA DAS NOTAS (0-10) */}
-                          <td 
-                            className="p-1 text-center border-r border-slate-100 dark:border-slate-800 cursor-pointer"
-                            onDoubleClick={() => {
-                              const val = prompt('Informe a Média das Notas (0-10):', aluno.notaFinal.toString());
-                              if (val !== null) {
-                                handleUpdateStudent(aluno.id, 'notaFinal', parseFloat(val) || 0);
-                              }
-                            }}
-                            title="Duplo clique para editar média das notas (0-10)"
-                          >
-                            <span className="font-mono font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                              {aluno.notaFinal}
-                            </span>
-                          </td>
-
-                          {/* STATUS APROVAÇÃO */}
-                          <td className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              aluno.statusAprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                              aluno.statusAprovacao === 'Reprovado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
-                              'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                            }`}>
-                              {aluno.statusAprovacao}
-                            </span>
-                          </td>
-
-                          {/* AÇÃO (EDITAR / SALVAR / EXCLUIR) */}
-                          <td className="p-1 text-center">
-                            {isEditing ? (
-                              <div className="flex items-center justify-center space-x-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveRow(aluno.id)}
-                                  className="flex items-center space-x-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-xs transition-colors"
-                                  title="Salvar edição da linha"
-                                >
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  <span>Salvar</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleCancelRowEdit}
-                                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                                  title="Cancelar"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center space-x-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditRow(aluno)}
-                                  className="flex items-center space-x-1 px-2 py-0.5 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded transition-colors text-[10px] font-bold"
-                                  title="Editar Matrícula, Login e Nome"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                  <span>Editar</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
-                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
-                                  title="Remover operador"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-
-                        {/* 4 EXPANDABLE DAILY PRESENCE ROWS FOR THIS OPERATOR */}
-                        {isPresencaGridOpen && (
-                          <tr className="bg-indigo-50/20 dark:bg-slate-900/40">
-                            <td colSpan={8} className="p-2.5 border-b border-indigo-100 dark:border-slate-800">
-                              <div className="bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 p-2.5 shadow-2xs space-y-2">
-                                <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700">
-                                  <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
-                                    <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                                    Presença & Apontamentos: <span className="text-indigo-600 dark:text-indigo-300 font-extrabold">{aluno.nome}</span>
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    (Altere a frequência, hora extra ou observação e as alterações são salvas no boletim)
-                                  </span>
-                                </div>
-
-                                <div className="space-y-1.5 overflow-x-auto">
-                                  <div className="grid grid-cols-11 gap-1 min-w-[750px] items-center text-[10px]">
-                                    {/* ROW 1: DATA */}
-                                    <div className="font-extrabold text-slate-600 dark:text-slate-300 uppercase py-1 px-1 bg-slate-100 dark:bg-slate-700/60 rounded">
-                                      DATA
-                                    </div>
-                                    {visibleDates.map(d => (
-                                      <div key={`dt-${d.fullDate}`} className="bg-slate-800 text-white font-bold text-center py-1 rounded">
-                                        {d.label}
-                                      </div>
-                                    ))}
-
-                                    {/* ROW 2: FREQUÊNCIA */}
-                                    <div className="font-extrabold text-slate-600 dark:text-slate-300 uppercase py-1 px-1 bg-slate-100 dark:bg-slate-700/60 rounded">
-                                      FREQUÊNCIA
-                                    </div>
-                                    {visibleDates.map(d => {
-                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
-                                      const status = currentItem.frequencia || '';
-                                      return (
-                                        <select
-                                          key={`freq-${d.fullDate}`}
-                                          value={status}
-                                          onChange={(e) => handleUpdateDailyRecord(aluno.id, d.fullDate, 'frequencia', e.target.value)}
-                                          className={`w-full py-1 text-center font-black rounded border-0 text-[10px] cursor-pointer focus:outline-none ${getStatusStyle(status)}`}
-                                        >
-                                          <option value="" className="bg-white text-slate-400 font-bold">- (Em branco)</option>
-                                          <option value="P" className="bg-white text-slate-900 font-bold">P (Presente)</option>
-                                          <option value="FI" className="bg-white text-rose-700 font-bold">FI (Falta Inj.)</option>
-                                          <option value="FJ" className="bg-white text-amber-700 font-bold">FJ (Falta Just.)</option>
-                                          <option value="DRS" className="bg-white text-slate-700 font-bold">DRS</option>
-                                          <option value="BH" className="bg-white text-slate-700 font-bold">BH</option>
-                                          <option value="DAY OFF" className="bg-white text-amber-700 font-bold">DAY OFF</option>
-                                          <option value="FERIADO" className="bg-white text-purple-700 font-bold">FERIADO</option>
-                                          <option value="A" className="bg-white text-blue-700 font-bold">A (Atestado)</option>
-                                          <option value="TO" className="bg-white text-orange-700 font-bold">TO (Treinam. Obrig.)</option>
-                                        </select>
-                                      );
-                                    })}
-
-                                    {/* ROW 3: HORA EXTRA */}
-                                    <div className="font-extrabold text-slate-600 dark:text-slate-300 uppercase py-1 px-1 bg-slate-100 dark:bg-slate-700/60 rounded">
-                                      HORA EXTRA
-                                    </div>
-                                    {visibleDates.map(d => {
-                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
-                                      return (
-                                        <input
-                                          key={`he-${d.fullDate}`}
-                                          type="text"
-                                          placeholder="00:00"
-                                          value={currentItem.horaExtra || ''}
-                                          onChange={(e) => handleUpdateDailyRecord(aluno.id, d.fullDate, 'horaExtra', e.target.value)}
-                                          className="w-full text-center py-1 px-1 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-[10px] focus:ring-1 focus:ring-indigo-500"
-                                        />
-                                      );
-                                    })}
-
-                                    {/* ROW 4: OBS (Hover to view full text) */}
-                                    <div className="font-extrabold text-slate-600 dark:text-slate-300 uppercase py-1 px-1 bg-slate-100 dark:bg-slate-700/60 rounded">
-                                      OBS
-                                    </div>
-                                    {visibleDates.map(d => {
-                                      const currentItem = aluno.presencaDiaria?.[d.fullDate] || { frequencia: '', horaExtra: '', obs: '' };
-                                      return (
-                                        <input
-                                          key={`obs-${d.fullDate}`}
-                                          type="text"
-                                          placeholder="Obs..."
-                                          value={currentItem.obs || ''}
-                                          title={currentItem.obs || 'Passar o mouse para ver completo'}
-                                          onChange={(e) => handleUpdateDailyRecord(aluno.id, d.fullDate, 'obs', e.target.value)}
-                                          className="w-full py-1 px-1.5 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-[10px] font-normal truncate whitespace-nowrap overflow-hidden focus:ring-1 focus:ring-indigo-500"
-                                        />
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
                         )}
-                      </React.Fragment>
+
+                        {/* FREQUÊNCIA (%) - CLICK TO OPEN MINI-CALENDAR MODAL */}
+                        <td className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAlunoCalendar({ aluno, course: activeCourse })}
+                            className="font-mono font-extrabold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer text-[11px] flex items-center justify-center space-x-1 mx-auto"
+                            title="Clique para ver o Calendário de Presenças completo"
+                          >
+                            <Calendar className="w-3 h-3" />
+                            <span>{aluno.frequenciaPercent}%</span>
+                          </button>
+                        </td>
+
+                        {/* MÉDIA DAS NOTAS (0-10) - CLICK TO OPEN EVALUATIONS MODAL */}
+                        <td className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAlunoNotas({ aluno, course: activeCourse })}
+                            className="font-mono font-extrabold px-2 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-100 transition-colors cursor-pointer text-[11px] flex items-center justify-center space-x-1 mx-auto"
+                            title="Clique para ver o Histórico de Provas e Avaliações"
+                          >
+                            <Award className="w-3 h-3 text-amber-500" />
+                            <span>{aluno.notaFinal}</span>
+                          </button>
+                        </td>
+
+                        {/* STATUS APROVAÇÃO */}
+                        <td className="p-1 text-center border-r border-slate-100 dark:border-slate-800">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            aluno.statusAprovacao === 'Aprovado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                            aluno.statusAprovacao === 'Reprovado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                            'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          }`}>
+                            {aluno.statusAprovacao}
+                          </span>
+                        </td>
+
+                        {/* AÇÃO */}
+                        <td className="p-1 text-center">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveRow(aluno.id)}
+                                className="flex items-center space-x-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-xs transition-colors"
+                                title="Salvar edição da linha"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Salvar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelRowEdit}
+                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                title="Cancelar"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditRow(aluno)}
+                                className="flex items-center space-x-1 px-2 py-0.5 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded transition-colors text-[10px] font-bold"
+                                title="Editar Matrícula, Login e Nome"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Editar</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAlunoDossie({ aluno, course: activeCourse })}
+                                className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded transition-colors text-[10px] font-extrabold shadow-2xs"
+                                title="Abrir / Preencher Dossiê do Colaborador (Foto, Vivências em Sala, Avaliações)"
+                              >
+                                <UserCheck className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                <span>Dossiê</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setEditingAlunos(prev => prev.filter(a => a.id !== aluno.id))}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
+                                title="Remover operador"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
                     );
                   })}
 
                   {editingAlunos.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-6 text-center text-slate-400">
+                      <td colSpan={10} className="p-6 text-center text-slate-400">
                         Nenhum operador cadastrado nesta turma.
                       </td>
                     </tr>
@@ -1043,7 +1538,7 @@ export const FrequenciasNotasView: React.FC = () => {
 
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Lançar Nota dos Operadores (Nota de 0 a 10. A Média será recalcula na tabela):
+                Lançar Nota dos Operadores (Nota de 0 a 10. A Média será recalculada na tabela):
               </p>
               <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
                 {editingAlunos.map(aluno => (
@@ -1094,6 +1589,52 @@ export const FrequenciasNotasView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* STUDENT MINI CALENDAR MODAL */}
+      <AlunoPresencaCalendarModal
+        isOpen={selectedAlunoCalendar !== null}
+        onClose={() => setSelectedAlunoCalendar(null)}
+        aluno={selectedAlunoCalendar?.aluno || null}
+        treinamentoNome={selectedAlunoCalendar?.course.treinamento || ''}
+        dataInicio={selectedAlunoCalendar?.course.dataInicio}
+        dataFim={selectedAlunoCalendar?.course.dataFim}
+        onUpdateDailyStatus={(alunoId, dateKey, status) => {
+          handleUpdateDailyRecord(alunoId, dateKey, 'frequencia', status);
+          if (selectedAlunoCalendar) {
+            setSelectedAlunoCalendar(prev => prev ? {
+              ...prev,
+              aluno: {
+                ...prev.aluno,
+                presencaDiaria: {
+                  ...(prev.aluno.presencaDiaria || {}),
+                  [dateKey]: {
+                    ...(prev.aluno.presencaDiaria?.[dateKey] || { frequencia: '', horaExtra: '', obs: '' }),
+                    frequencia: status
+                  }
+                }
+              }
+            } : null);
+          }
+        }}
+      />
+
+      {/* STUDENT EVALUATIONS MODAL */}
+      <AlunoNotasModal
+        isOpen={selectedAlunoNotas !== null}
+        onClose={() => setSelectedAlunoNotas(null)}
+        aluno={selectedAlunoNotas?.aluno || null}
+        onUpdateProvas={handleUpdateProvasFromModal}
+      />
+
+      {/* STUDENT DOSSIÊ MODAL */}
+      {selectedAlunoDossie && selectedAlunoDossie.aluno && (
+        <AlunoDossieModal
+          aluno={selectedAlunoDossie.aluno}
+          nomeTreinamento={selectedAlunoDossie.course.treinamento}
+          onClose={() => setSelectedAlunoDossie(null)}
+          onSaveDossie={handleSaveDossie}
+        />
       )}
 
       {/* CONFIRMATION MODAL FOR DELETE COURSE */}
