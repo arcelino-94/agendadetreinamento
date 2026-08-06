@@ -167,7 +167,18 @@ export const SalasView: React.FC<SalasViewProps> = ({
     setSelectedDate(new Date().toISOString().split('T')[0]);
   };
 
-  const turmasDoDia = turmas.filter(t => t.data === selectedDate && t.status !== 'Cancelado');
+  const isTurmaActiveOnDate = (t: Turma, dateStr: string) => {
+    if (t.status === 'Cancelado') return false;
+    if (t.data === dateStr) return true;
+    const start = t.dataInicio || t.data;
+    const end = t.dataFim || t.dataInicio || t.data;
+    if (start && end) {
+      return dateStr >= start && dateStr <= end;
+    }
+    return false;
+  };
+
+  const turmasDoDia = turmas.filter(t => isTurmaActiveOnDate(t, selectedDate));
 
   const getBadgeStyle = (tipo: TipoDemanda) => {
     switch (tipo) {
@@ -228,7 +239,7 @@ export const SalasView: React.FC<SalasViewProps> = ({
   // Helper para verificar disponibilidade LIVE em relação ao horário atual/meio-dia
   const getLiveRoomStatus = (salaId: string) => {
     const turmasHoje = turmas.filter(
-      t => t.salaId === salaId && t.data === selectedDate && t.status !== 'Cancelado'
+      t => t.salaId === salaId && isTurmaActiveOnDate(t, selectedDate)
     );
 
     if (turmasHoje.length === 0) {
@@ -286,40 +297,43 @@ export const SalasView: React.FC<SalasViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center space-x-2 shrink-0 overflow-x-auto no-scrollbar py-0.5 whitespace-nowrap">
           {/* Subtab Buttons */}
-          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
             <button
+              type="button"
               onClick={() => setActiveSubTab('cards')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeSubTab === 'cards'
                   ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
               <span>Salas Cadastradas ({salas.length})</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveSubTab('ocupacao')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeSubTab === 'ocupacao'
                   ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Grade de Ocupação de Sala</span>
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>Ocupação da Sala</span>
             </button>
           </div>
 
           <button
+            type="button"
             onClick={() => handleOpenModal()}
-            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer whitespace-nowrap shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>Cadastrar Sala</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Nova Sala</span>
           </button>
         </div>
       </div>
@@ -329,7 +343,7 @@ export const SalasView: React.FC<SalasViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {salas.map(s => {
             const live = getLiveRoomStatus(s.id);
-            const turmasHojeSala = turmas.filter(t => t.salaId === s.id && t.data === selectedDate && t.status !== 'Cancelado');
+            const turmasHojeSala = turmas.filter(t => t.salaId === s.id && isTurmaActiveOnDate(t, selectedDate));
 
             return (
               <div 
@@ -664,7 +678,7 @@ export const SalasView: React.FC<SalasViewProps> = ({
                         </td>
 
                         {getWeekDates(selectedDate).map(day => {
-                          const turmasNaSala = turmas.filter(t => t.salaId === s.id && t.data === day.dateStr && t.status !== 'Cancelado');
+                          const turmasNaSala = turmas.filter(t => t.salaId === s.id && isTurmaActiveOnDate(t, day.dateStr));
 
                           return (
                             <td 
@@ -720,7 +734,7 @@ export const SalasView: React.FC<SalasViewProps> = ({
 
               <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800/80 border-b border-slate-200 dark:border-slate-800">
                 {getMonthDays(selectedDate).map((mDay, idx) => {
-                  const turmasDay = turmas.filter(t => t.data === mDay.dateStr && t.status !== 'Cancelado');
+                  const turmasDay = turmas.filter(t => isTurmaActiveOnDate(t, mDay.dateStr));
 
                   return (
                     <div 

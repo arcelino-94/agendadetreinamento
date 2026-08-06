@@ -158,6 +158,17 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
 
   const todasEspecialidades = Array.from(new Set(multiplicadoresAtivos.flatMap(m => m.especialidades)));
 
+  const isTurmaActiveOnDate = (t: Turma, dateStr: string) => {
+    if (t.status === 'Cancelado') return false;
+    if (t.data === dateStr) return true;
+    const start = t.dataInicio || t.data;
+    const end = t.dataFim || t.dataInicio || t.data;
+    if (start && end) {
+      return dateStr >= start && dateStr <= end;
+    }
+    return false;
+  };
+
   // Filtragem de turmas por permissão
   const turmasPermitidas = turmas.filter(t => {
     if (t.status === 'Cancelado') return false;
@@ -367,7 +378,7 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
       {viewMode === 'semana' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
           {weekDays.map(day => {
-            const turmasDoDiaSemana = turmasPermitidas.filter(t => t.data === day.dateStr);
+            const turmasDoDiaSemana = turmasPermitidas.filter(t => isTurmaActiveOnDate(t, day.dateStr));
 
             return (
               <div 
@@ -464,7 +475,7 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
           {/* Grid de Dias do Mês */}
           <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800/80 border-b border-slate-200 dark:border-slate-800">
             {monthDays.map((mDay, idx) => {
-              const turmasDay = turmasPermitidas.filter(t => t.data === mDay.dateStr);
+              const turmasDay = turmasPermitidas.filter(t => isTurmaActiveOnDate(t, mDay.dateStr));
 
               return (
                 <div 
@@ -553,7 +564,7 @@ export const AgendaGrid: React.FC<AgendaGridProps> = ({
 
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {multiplicadoresExibidos.map((m: Multiplicador) => {
-                  const turmasDoDia = turmasPermitidas.filter(t => t.data === selectedDate);
+                  const turmasDoDia = turmasPermitidas.filter(t => isTurmaActiveOnDate(t, selectedDate));
 
                   return (
                     <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">

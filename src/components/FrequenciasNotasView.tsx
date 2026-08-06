@@ -30,7 +30,8 @@ import {
   Layers,
   Sparkles,
   Pencil,
-  DoorOpen
+  DoorOpen,
+  ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ItemFrequenciaNota, AlunoFrequenciaNota, PresencaDiariaItem, ItemProvaNota, DossieOperador } from '../types';
@@ -120,6 +121,12 @@ export const FrequenciasNotasView: React.FC = () => {
   const [bulkObsInput, setBulkObsInput] = useState<string>('');
   const [presenceViewMode, setPresenceViewMode] = useState<'lote' | 'matriz'>('lote');
 
+  // Calendar Modal & Training Extension states
+  const [isDateCalendarOpen, setIsDateCalendarOpen] = useState(false);
+  const [calendarNavDate, setCalendarNavDate] = useState<Date>(new Date());
+  const [pendingExtensionDate, setPendingExtensionDate] = useState<string | null>(null);
+  const [customXDaysInput, setCustomXDaysInput] = useState<number>(5);
+
   const [isLancarNotaOpen, setIsLancarNotaOpen] = useState(false);
   const [nomeProvaInput, setNomeProvaInput] = useState('Prova 1');
   const [dataProvaInput, setDataProvaInput] = useState(new Date().toISOString().split('T')[0]);
@@ -207,14 +214,19 @@ export const FrequenciasNotasView: React.FC = () => {
     return { totalCursos, totalAlunos, mediaFreq, mediaNota, taxaAprovacao };
   }, [filteredItems]);
 
-  // Generate course dates aligned strictly with course dataInicio
+  // Generate course dates aligned strictly with course dataInicio and dataFim
   const generatedDates = useMemo(() => {
     if (!activeCourse) return [];
     const start = parseLocalDate(activeCourse.dataInicio);
-    const dates: { fullDate: string; label: string; dayOfWeek: string; formattedFull: string }[] = [];
+    const end = parseLocalDate(activeCourse.dataFim || activeCourse.dataInicio);
+
+    const daysBetween = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const totalDaysToGenerate = Math.max(daysBetween, trainingDaysCount);
+
+    const dates: { fullDate: string; label: string; dayOfWeek: string; formattedFull: string; isProgrammed: boolean }[] = [];
     const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-    for (let i = 0; i < trainingDaysCount; i++) {
+    for (let i = 0; i < totalDaysToGenerate; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
       const yyyy = d.getFullYear();
@@ -224,10 +236,110 @@ export const FrequenciasNotasView: React.FC = () => {
       const label = `${dd}/${mm}`;
       const dayOfWeek = daysOfWeek[d.getDay()];
       const formattedFull = `${dd}/${mm}/${yyyy} (${dayOfWeek})`;
-      dates.push({ fullDate: dateStr, label, dayOfWeek, formattedFull });
+      const isProgrammed = i < daysBetween;
+      dates.push({ fullDate: dateStr, label, dayOfWeek, formattedFull, isProgrammed });
     }
     return dates;
   }, [activeCourse, trainingDaysCount]);
+
+  // Calendar days grid calculation for Date Selection Modal
+  const calendarDaysGrid = useMemo(() => {
+    if (!activeCourse) return [];
+    const year = calendarNavDate.getFullYear();
+    const month = calendarNavDate.getMonth();
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDayOfWeek = firstDay.getDay();
+    const totalDaysInMonth = lastDay.getDate();
+
+    const startProg = parseLocalDate(activeCourse.dataInicio);
+    const endProg = parseLocalDate(activeCourse.dataFim || activeCourse.dataInicio);
+    startProg.setHours(0,0,0,0);
+    endProg.setHours(23,59,59,999);
+
+    const grid: ({ dateStr: string; dayNum: number; isProgrammed: boolean; isSelected: boolean } | null)[] = [];
+
+    for (let i = 0; i < startDayOfWeek; i++) {
+      grid.push(null);
+    }
+
+    for (let d = 1; d <= totalDaysInMonth; d++) {
+      const curDateObj = new Date(year, month, d);
+      const yyyy = curDateObj.getFullYear();
+      const mm = String(curDateObj.getMonth() + 1).padStart(2, '0');
+      const dd = String(curDateObj.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      const isProgrammed = curDateObj >= startProg && curDateObj <= endProg;
+      const isSelected = dateStr === selectedBulkDateKey;
+
+      grid.push({ dateStr, dayNum: d, isProgrammed, isSelected });
+    }
+
+    return grid;
+  }, [calendarNavDate, activeCourse, selectedBulkDateKey]);
+
+  const handleCalendarDayClick = (dateStr: string, isProgrammed: boolean) => {
+    if (isProgrammed) {
+      setSelectedBulkDateKey(dateStr);
+      setIsDateCalendarOpen(false);
+    } else {
+      setPendingExtensionDate(dateStr);
+    }
+  };
+
+  const confirmExtensionAndSelectDate = (dateStr: string) => {
+    if (!activeCourse) return;
+    const currentEnd = parseLocalDate(activeCourse.dataFim || activeCourse.dataInicio);
+    const selectedDateObj = parseLocalDate(dateStr);
+
+    let newEndStr = activeCourse.dataFim;
+    if (selectedDateObj > currentEnd) {
+      const yyyy = selectedDateObj.getFullYear();
+      const mm = String(selectedDateObj.getMonth() + 1).padStart(2, '0');
+      const dd = String(selectedDateObj.getDate()).padStart(2, '0');
+      newEndStr = `${yyyy}-${mm}-${dd}`;
+    }
+
+    const updated = {
+      ...activeCourse,
+      dataFim: newEndStr
+    };
+    setActiveCourse(updated);
+    updateFrequenciaNota(activeCourse.id, { dataFim: newEndStr });
+
+    const start = parseLocalDate(activeCourse.dataInicio);
+    const newDaysBetween = Math.max(1, Math.round((parseLocalDate(newEndStr).getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    setTrainingDaysCount(newDaysBetween);
+
+    setSelectedBulkDateKey(dateStr);
+    setPendingExtensionDate(null);
+    setIsDateCalendarOpen(false);
+  };
+
+  const handleAddXDaysToCourse = (extraDays: number) => {
+    if (!activeCourse || extraDays <= 0) return;
+    const currentEnd = parseLocalDate(activeCourse.dataFim || activeCourse.dataInicio);
+    const newEnd = new Date(currentEnd);
+    newEnd.setDate(newEnd.getDate() + extraDays);
+    const yyyy = newEnd.getFullYear();
+    const mm = String(newEnd.getMonth() + 1).padStart(2, '0');
+    const dd = String(newEnd.getDate()).padStart(2, '0');
+    const newEndStr = `${yyyy}-${mm}-${dd}`;
+
+    const updated = {
+      ...activeCourse,
+      dataFim: newEndStr
+    };
+
+    setActiveCourse(updated);
+    updateFrequenciaNota(activeCourse.id, { dataFim: newEndStr });
+
+    const start = parseLocalDate(activeCourse.dataInicio);
+    const newDaysBetween = Math.max(1, Math.round((newEnd.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    setTrainingDaysCount(newDaysBetween);
+  };
 
   const visibleDates = useMemo(() => {
     return generatedDates.slice(dateOffsetIndex, dateOffsetIndex + 10);
@@ -241,12 +353,17 @@ export const FrequenciasNotasView: React.FC = () => {
     setIsPresencaGridOpen(false);
     setDateOffsetIndex(0);
 
-    // Initialize bulk selected date to course dataInicio
     const start = parseLocalDate(course.dataInicio);
+    const end = parseLocalDate(course.dataFim || course.dataInicio);
+    const numDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    setTrainingDaysCount(numDays);
+
     const yyyy = start.getFullYear();
     const mm = String(start.getMonth() + 1).padStart(2, '0');
     const dd = String(start.getDate()).padStart(2, '0');
-    setSelectedBulkDateKey(`${yyyy}-${mm}-${dd}`);
+    const startKey = `${yyyy}-${mm}-${dd}`;
+    setSelectedBulkDateKey(startKey);
+    setCalendarNavDate(start);
   };
 
   const handleOpenEditCourseMetadata = (course: ItemFrequenciaNota) => {
@@ -416,21 +533,77 @@ export const FrequenciasNotasView: React.FC = () => {
     setEditingAlunos(prev => prev.map(a => {
       if (a.id === alunoId) {
         const currentDiario = a.presencaDiaria || {};
+        const updatedDiario = { ...currentDiario };
         const currentItem = currentDiario[dateKey] || { frequencia: '', horaExtra: '', obs: '' };
-        const updatedItem = { ...currentItem, [field]: value };
-        const updatedDiario = { ...currentDiario, [dateKey]: updatedItem };
+        const previousFreq = (currentItem.frequencia || '').toUpperCase();
+        const normVal = value.toUpperCase();
 
-        // Recalculate frequency % (DSR, BH, FERIADO, DAY OFF, etc. do NOT lower frequency)
-        const entries = Object.values(updatedDiario) as PresencaDiariaItem[];
-        const filledEntries = entries.filter(e => e.frequencia && e.frequencia !== '');
-        const totalDays = filledEntries.length;
-        const presentDays = filledEntries.filter(e => e.frequencia !== 'FI' && e.frequencia !== 'FJ').length;
+        if (field === 'frequencia') {
+          if (normVal === 'TO' || normVal === 'FINALIZADO') {
+            const valToSet = normVal === 'TO' ? 'TO' : 'FINALIZADO';
+            const startIndex = generatedDates.findIndex(d => d.fullDate === dateKey);
+            if (startIndex !== -1) {
+              for (let i = startIndex; i < generatedDates.length; i++) {
+                const dKey = generatedDates[i].fullDate;
+                const existing = updatedDiario[dKey] || { frequencia: '', horaExtra: '', obs: '' };
+                updatedDiario[dKey] = { ...existing, frequencia: valToSet };
+              }
+            } else {
+              updatedDiario[dateKey] = { ...currentItem, frequencia: valToSet };
+            }
+          } else if (
+            (previousFreq === 'TO' && normVal !== 'TO') ||
+            (previousFreq === 'FINALIZADO' && normVal !== 'FINALIZADO')
+          ) {
+            // User is removing or changing TO or FINALIZADO
+            const startIndex = generatedDates.findIndex(d => d.fullDate === dateKey);
+            if (startIndex !== -1) {
+              // Update current dateKey to new value
+              updatedDiario[dateKey] = { ...currentItem, frequencia: value };
+              // Clear subsequent dates that were set to previousFreq
+              for (let i = startIndex + 1; i < generatedDates.length; i++) {
+                const dKey = generatedDates[i].fullDate;
+                const existing = updatedDiario[dKey];
+                if (existing && (existing.frequencia || '').toUpperCase() === previousFreq) {
+                  updatedDiario[dKey] = { ...existing, frequencia: '' };
+                }
+              }
+            } else {
+              updatedDiario[dateKey] = { ...currentItem, frequencia: value };
+            }
+          } else {
+            updatedDiario[dateKey] = { ...currentItem, [field]: value };
+          }
+        } else {
+          updatedDiario[dateKey] = { ...currentItem, [field]: value };
+        }
+
+        const hasTO = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'TO');
+        const hasFinalizado = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'FINALIZADO');
+
+        // Recalculate frequency % (FI, FJ, TO, FINALIZADO do not count as present; TO & FINALIZADO excluded from active days)
+        const entries = (Object.values(updatedDiario) as PresencaDiariaItem[]).filter(e => e.frequencia && e.frequencia !== '');
+        const activeEntries = entries.filter(e => {
+          const f = (e.frequencia || '').toUpperCase();
+          return f !== 'FINALIZADO';
+        });
+        const totalDays = activeEntries.length;
+        const presentDays = activeEntries.filter(e => {
+          const f = (e.frequencia || '').toUpperCase();
+          return f !== 'FI' && f !== 'FJ' && f !== 'TO';
+        }).length;
         const newFreqPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : a.frequenciaPercent;
 
         let status = a.statusAprovacao;
-        if (newFreqPercent < 75 || a.notaFinal < 5.0) status = 'Reprovado';
-        else if (newFreqPercent >= 85 && a.notaFinal >= 7.0) status = 'Aprovado';
-        else status = 'Em Andamento';
+        if (hasTO) {
+          status = 'Desligado (TO)' as any;
+        } else if (hasFinalizado || (newFreqPercent >= 85 && a.notaFinal >= 7.0)) {
+          status = a.notaFinal >= 5.0 ? 'Aprovado' : 'Reprovado';
+        } else if (newFreqPercent < 75 || a.notaFinal < 5.0) {
+          status = 'Reprovado';
+        } else {
+          status = 'Em Andamento';
+        }
 
         return {
           ...a,
@@ -448,20 +621,66 @@ export const FrequenciasNotasView: React.FC = () => {
     if (!dateKey) return;
     setEditingAlunos(prev => prev.map(a => {
       const currentDiario = a.presencaDiaria || {};
+      const updatedDiario = { ...currentDiario };
       const currentItem = currentDiario[dateKey] || { frequencia: '', horaExtra: '', obs: '' };
-      const updatedItem = { ...currentItem, frequencia: status };
-      const updatedDiario = { ...currentDiario, [dateKey]: updatedItem };
+      const previousFreq = (currentItem.frequencia || '').toUpperCase();
+      const normStatus = status.toUpperCase();
 
-      const entries = Object.values(updatedDiario) as PresencaDiariaItem[];
-      const filledEntries = entries.filter(e => e.frequencia && e.frequencia !== '');
-      const totalDays = filledEntries.length;
-      const presentDays = filledEntries.filter(e => e.frequencia !== 'FI' && e.frequencia !== 'FJ').length;
+      if (normStatus === 'TO' || normStatus === 'FINALIZADO') {
+        const valToSet = normStatus === 'TO' ? 'TO' : 'FINALIZADO';
+        const startIndex = generatedDates.findIndex(d => d.fullDate === dateKey);
+        if (startIndex !== -1) {
+          for (let i = startIndex; i < generatedDates.length; i++) {
+            const dKey = generatedDates[i].fullDate;
+            const existing = updatedDiario[dKey] || { frequencia: '', horaExtra: '', obs: '' };
+            updatedDiario[dKey] = { ...existing, frequencia: valToSet };
+          }
+        } else {
+          updatedDiario[dateKey] = { ...currentItem, frequencia: valToSet };
+        }
+      } else if (
+        (previousFreq === 'TO' && normStatus !== 'TO') ||
+        (previousFreq === 'FINALIZADO' && normStatus !== 'FINALIZADO')
+      ) {
+        const startIndex = generatedDates.findIndex(d => d.fullDate === dateKey);
+        if (startIndex !== -1) {
+          updatedDiario[dateKey] = { ...currentItem, frequencia: status };
+          for (let i = startIndex + 1; i < generatedDates.length; i++) {
+            const dKey = generatedDates[i].fullDate;
+            const existing = updatedDiario[dKey];
+            if (existing && (existing.frequencia || '').toUpperCase() === previousFreq) {
+              updatedDiario[dKey] = { ...existing, frequencia: '' };
+            }
+          }
+        } else {
+          updatedDiario[dateKey] = { ...currentItem, frequencia: status };
+        }
+      } else {
+        updatedDiario[dateKey] = { ...currentItem, frequencia: status };
+      }
+
+      const hasTO = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'TO');
+      const hasFinalizado = Object.values(updatedDiario).some(item => (item.frequencia || '').toUpperCase() === 'FINALIZADO');
+
+      const entries = (Object.values(updatedDiario) as PresencaDiariaItem[]).filter(e => e.frequencia && e.frequencia !== '');
+      const activeEntries = entries.filter(e => (e.frequencia || '').toUpperCase() !== 'FINALIZADO');
+      const totalDays = activeEntries.length;
+      const presentDays = activeEntries.filter(e => {
+        const f = (e.frequencia || '').toUpperCase();
+        return f !== 'FI' && f !== 'FJ' && f !== 'TO';
+      }).length;
       const newFreqPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : a.frequenciaPercent;
 
       let statusAp = a.statusAprovacao;
-      if (newFreqPercent < 75 || a.notaFinal < 5.0) statusAp = 'Reprovado';
-      else if (newFreqPercent >= 85 && a.notaFinal >= 7.0) statusAp = 'Aprovado';
-      else statusAp = 'Em Andamento';
+      if (hasTO) {
+        statusAp = 'Desligado (TO)' as any;
+      } else if (hasFinalizado || (newFreqPercent >= 85 && a.notaFinal >= 7.0)) {
+        statusAp = a.notaFinal >= 5.0 ? 'Aprovado' : 'Reprovado';
+      } else if (newFreqPercent < 75 || a.notaFinal < 5.0) {
+        statusAp = 'Reprovado';
+      } else {
+        statusAp = 'Em Andamento';
+      }
 
       return {
         ...a,
@@ -507,8 +726,10 @@ export const FrequenciasNotasView: React.FC = () => {
       case 'BH': return 'bg-slate-700 text-white font-black';
       case 'DAY OFF': return 'bg-yellow-500 text-slate-900 font-black';
       case 'FERIADO': return 'bg-purple-600 text-white font-black';
+      case 'FINALIZADO':
+      case 'Finalizado': return 'bg-indigo-600 text-white font-black';
       case 'A': return 'bg-blue-600 text-white font-black';
-      case 'TO': return 'bg-orange-600 text-white font-black';
+      case 'TO': return 'bg-slate-700 text-amber-300 font-black border border-amber-500/40';
       default: return 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold border border-slate-300 dark:border-slate-700';
     }
   };
@@ -769,83 +990,85 @@ export const FrequenciasNotasView: React.FC = () => {
               key={course.id}
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:shadow-md transition-all space-y-3"
             >
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+              <div className="pb-3 border-b border-slate-100 dark:border-slate-800 space-y-1.5">
+                {/* Top Row: Badges on Left, Fixed Buttons on Right */}
+                <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0 ${
                       course.tipo === 'Novatos' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' :
                       course.tipo === 'Sinergia' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' :
                       'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                     }`}>
                       {course.tipo}
                     </span>
-                    <span className="text-xs font-mono font-bold text-slate-400">{course.id}</span>
+                    <span className="text-xs font-mono font-bold text-slate-400 shrink-0">{course.id}</span>
                     {isItemPendingSync(course.id) && (
                       <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center space-x-1 shrink-0" title="Salvo localmente na máquina, pendente de sincronizar no Firestore">
                         <CloudOff className="w-2.5 h-2.5" />
-                        <span>Pendente de sincronizar</span>
+                        <span>Pendente</span>
                       </span>
                     )}
                   </div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-1">
-                    {course.treinamento}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    <span>Células: <strong>{course.celulas.join(', ')}</strong></span>
-                    <span>•</span>
-                    <span>Multiplicador: <strong>{course.multiplicador}</strong></span>
-                    <span>•</span>
-                    <span className="inline-flex items-center space-x-1">
-                      <Clock className="w-3 h-3 text-indigo-500" />
-                      <span>Horário: <strong>{course.horarioTreinamento || '14:00 às 20:20'}</strong></span>
-                    </span>
-                    <span>•</span>
-                    <span className="inline-flex items-center space-x-1">
-                      <DoorOpen className="w-3 h-3 text-emerald-500" />
-                      <span>Sala: <strong>{course.salaNome || 'Sala de Treinamento'}</strong></span>
-                    </span>
-                    <span>•</span>
-                    <span>Período: <strong>{course.dataInicio} à {course.dataFim}</strong></span>
+
+                  <div className="flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleExportExcelDossie(course)}
+                      className="flex items-center space-x-1 px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-[11px] font-bold shadow-2xs transition-colors whitespace-nowrap cursor-pointer shrink-0"
+                      title="Exportar planilha Excel completa com Dossiê dos Operadores, Frequências e Notas"
+                    >
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">Dossiê</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCourseDetails(course)}
+                      className="flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition-colors whitespace-nowrap cursor-pointer shrink-0"
+                    >
+                      <FileCheck className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">Lançar Frequências e Notas</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCourseMetadata(course)}
+                      className="p-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors cursor-pointer shrink-0"
+                      title="Editar Informações do Treinamento (Multiplicador, Operadores, Horário, Sala)"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeletingCourseId(course.id)}
+                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer shrink-0"
+                      title="Excluir este programa/turma"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2 self-end md:self-center">
-                  <button
-                    type="button"
-                    onClick={() => handleExportExcelDossie(course)}
-                    className="flex items-center space-x-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
-                    title="Exportar planilha Excel completa com Dossiê dos Operadores, Frequências e Notas"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Dossiê</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCourseDetails(course)}
-                    className="flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
-                  >
-                    <FileCheck className="w-4 h-4" />
-                    <span>Lançar Frequências e Notas</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditCourseMetadata(course)}
-                    className="p-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition-colors"
-                    title="Editar Informações do Treinamento (Multiplicador, Operadores, Horário, Sala)"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDeletingCourseId(course.id)}
-                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                    title="Excluir este programa/turma"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white pt-0.5">
+                  {course.treinamento}
+                </h3>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>Células: <strong>{course.celulas.join(', ')}</strong></span>
+                  <span>•</span>
+                  <span>Multiplicador: <strong>{course.multiplicador}</strong></span>
+                  <span>•</span>
+                  <span className="inline-flex items-center space-x-1">
+                    <Clock className="w-3 h-3 text-indigo-500" />
+                    <span>Horário: <strong>{course.horarioTreinamento || '14:00 às 20:20'}</strong></span>
+                  </span>
+                  <span>•</span>
+                  <span className="inline-flex items-center space-x-1">
+                    <DoorOpen className="w-3 h-3 text-emerald-500" />
+                    <span>Sala: <strong>{course.salaNome || 'Sala de Treinamento'}</strong></span>
+                  </span>
+                  <span>•</span>
+                  <span>Período: <strong>{course.dataInicio} à {course.dataFim}</strong></span>
                 </div>
               </div>
 
@@ -907,26 +1130,15 @@ export const FrequenciasNotasView: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleAddOperatorRow}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
-                    title="Acrescentar mais uma linha para operador"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Adicionar Linha</span>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => setIsEditingAllRows(prev => !prev)}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors shadow-2xs ${
+                    className={`p-2 rounded-xl transition-colors shadow-2xs cursor-pointer ${
                       isEditingAllRows 
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
-                        : 'bg-slate-700 hover:bg-slate-600 text-white'
+                        ? 'bg-emerald-600 text-white' 
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
-                    title="Habilitar/desabilitar edição de todas as linhas de operadores"
+                    title={isEditingAllRows ? "Concluir edição de todas as linhas" : "Editar todas as linhas de operadores"}
                   >
-                    {isEditingAllRows ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-                    <span>{isEditingAllRows ? 'Concluir Edição de Linhas' : 'Editar Linhas'}</span>
+                    {isEditingAllRows ? <CheckCircle2 className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
                   </button>
 
                   <button
@@ -975,21 +1187,26 @@ export const FrequenciasNotasView: React.FC = () => {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-700/80">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-slate-200 flex items-center space-x-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                         <span>Data do Lançamento:</span>
                       </span>
 
-                      <select
-                        value={selectedBulkDateKey}
-                        onChange={(e) => setSelectedBulkDateKey(e.target.value)}
-                        className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-white outline-none focus:ring-1 focus:ring-slate-500"
+                      {/* Small Calendar trigger button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedBulkDateKey) {
+                            setCalendarNavDate(parseLocalDate(selectedBulkDateKey));
+                          } else if (activeCourse) {
+                            setCalendarNavDate(parseLocalDate(activeCourse.dataInicio));
+                          }
+                          setIsDateCalendarOpen(true);
+                        }}
+                        className="flex items-center space-x-2 px-3 py-1 bg-slate-900 border border-slate-700 hover:border-indigo-500 rounded-lg text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
                       >
-                        {generatedDates.map(d => (
-                          <option key={d.fullDate} value={d.fullDate}>
-                            {d.formattedFull}
-                          </option>
-                        ))}
-                      </select>
+                        <span>{generatedDates.find(d => d.fullDate === selectedBulkDateKey)?.formattedFull || selectedBulkDateKey}</span>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
 
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-0.5">
                         para todos:
@@ -999,7 +1216,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'P')}
-                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Marcar Presença (P) para TODOS"
                         >
                           Presença
@@ -1008,7 +1225,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FI')}
-                          className="px-2.5 py-1 bg-rose-700 hover:bg-rose-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          className="px-2.5 py-1 bg-rose-700 hover:bg-rose-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Marcar Falta Injustificada (FI) para todos"
                         >
                           FI
@@ -1017,7 +1234,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FJ')}
-                          className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Marcar Falta Justificada (FJ) para todos"
                         >
                           FJ
@@ -1026,7 +1243,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'DRS')}
-                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Marcar DSR para todos"
                         >
                           DSR
@@ -1035,7 +1252,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'BH')}
-                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Marcar Banco de Horas (BH) para todos"
                         >
                           BH
@@ -1044,7 +1261,7 @@ export const FrequenciasNotasView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleBulkApplyPresence(selectedBulkDateKey, 'FERIADO')}
-                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs"
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Marcar Feriado para todos"
                         >
                           Feriado
@@ -1052,27 +1269,27 @@ export const FrequenciasNotasView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* MODE SWITCHER (POR DIA / TODO O PERÍODO) WITHOUT EMOJIS */}
+                    {/* MODE SWITCHER (POR DIA / TODO O PERÍODO) WITH EXTENSION INPUT */}
                     <div className="flex items-center space-x-2 shrink-0">
                       {presenceViewMode === 'matriz' && (
                         <div className="flex items-center space-x-1.5 bg-slate-900 px-2 py-1 rounded-lg border border-slate-700 mr-1">
-                          <span className="text-[10px] text-slate-300 font-bold">Dias:</span>
+                          <span className="text-[10px] text-slate-300 font-bold">Prorrogar:</span>
                           <input
                             type="number"
-                            min={5}
-                            max={90}
-                            value={trainingDaysCount}
-                            onChange={(e) => setTrainingDaysCount(Math.max(1, parseInt(e.target.value) || 25))}
-                            className="w-12 px-1 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-xs font-bold text-white"
-                            title="Quantidade total de dias do treinamento"
+                            min={1}
+                            max={60}
+                            value={customXDaysInput}
+                            onChange={(e) => setCustomXDaysInput(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-10 px-1 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-xs font-bold text-white"
+                            title="Digite quantos dias a mais deseja prorrogar"
                           />
                           <button
                             type="button"
-                            onClick={() => setTrainingDaysCount(prev => prev + 5)}
-                            className="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px] font-bold"
-                            title="Acrescentar +5 dias de treinamento"
+                            onClick={() => handleAddXDaysToCourse(customXDaysInput)}
+                            className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold transition-colors cursor-pointer"
+                            title={`Adicionar +${customXDaysInput} dias ao treinamento`}
                           >
-                            +5d
+                            + {customXDaysInput}d
                           </button>
                         </div>
                       )}
@@ -1330,6 +1547,7 @@ export const FrequenciasNotasView: React.FC = () => {
                                   <option value="">Mais...</option>
                                   <option value="DAY OFF">DAY OFF (Aniversário)</option>
                                   <option value="TO">TO</option>
+                                  <option value="FINALIZADO">Finalizado</option>
                                 </select>
                               </div>
                             </td>
@@ -1377,6 +1595,8 @@ export const FrequenciasNotasView: React.FC = () => {
                                   <option value="BH" className="bg-white text-slate-700 font-bold">BH</option>
                                   <option value="DAY OFF" className="bg-white text-slate-700 font-bold">DAY OFF</option>
                                   <option value="FERIADO" className="bg-white text-purple-700 font-bold">FERIADO</option>
+                                  <option value="TO" className="bg-white text-amber-700 font-bold">TO</option>
+                                  <option value="FINALIZADO" className="bg-white text-indigo-700 font-bold">FINALIZADO</option>
                                 </select>
                               </td>
                             );
@@ -1786,6 +2006,139 @@ export const FrequenciasNotasView: React.FC = () => {
         title="Confirmar Exclusão de Turma / Programa"
         itemDescription="esta turma de Frequência e Notas"
       />
+
+      {/* SMALL CALENDAR MODAL FOR DATE SELECTION */}
+      {isDateCalendarOpen && activeCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-4 space-y-3 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Data do Lançamento
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDateCalendarOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Período programado: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{activeCourse.dataInicio} à {activeCourse.dataFim}</strong>.
+            </p>
+
+            {/* Calendar Month Header */}
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => setCalendarNavDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 capitalize">
+                {calendarNavDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCalendarNavDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Calendar Grid Header */}
+            <div className="grid grid-cols-7 text-center gap-1 text-[10px] font-bold text-slate-400 pb-1">
+              <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+            </div>
+
+            {/* Calendar Days */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDaysGrid.map((dayItem, idx) => {
+                if (!dayItem) {
+                  return <div key={`blank-${idx}`} />;
+                }
+                const { dateStr, dayNum, isProgrammed, isSelected } = dayItem;
+
+                return (
+                  <button
+                    key={dateStr}
+                    type="button"
+                    onClick={() => handleCalendarDayClick(dateStr, isProgrammed)}
+                    className={`p-1.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center cursor-pointer ${
+                      isSelected 
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400 font-extrabold scale-105'
+                        : isProgrammed 
+                          ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200/60 dark:border-indigo-800/60'
+                          : 'bg-slate-50 dark:bg-slate-800/40 text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-700 hover:border-amber-300 border border-transparent'
+                    }`}
+                  >
+                    <span>{dayNum}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400">
+              <span className="flex items-center space-x-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
+                <span>Programado</span>
+              </span>
+              <span className="flex items-center space-x-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700 inline-block" />
+                <span>Clique para prorrogar</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM EXTENSION DIALOG */}
+      {pendingExtensionDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 rounded-2xl shadow-2xl max-w-sm w-full p-5 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center space-x-3 text-amber-600 dark:text-amber-400">
+              <div className="p-2.5 bg-amber-100 dark:bg-amber-950 rounded-xl">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Prorrogar Treinamento?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Adicionar mais um dia de treinamento
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+              A data selecionada está fora do período programado original do treinamento. Deseja adicionar este dia extra e prorrogar o treinamento?
+            </p>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPendingExtensionDate(null)}
+                className="px-3.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmExtensionAndSelectDate(pendingExtensionDate)}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                Confirmar e Lançar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -114,16 +114,28 @@ export const MatrizEspecialidadesView: React.FC = () => {
       {/* Grid das Células */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {filteredCelulas.map((c) => {
-          // Quantidade de operadores no Quadro vinculados a esta célula (com normalização de acentos e espaços)
-          const normalizeStr = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
-          const normCell = normalizeStr(c.nome);
-          const opsNaCelula = operadores.filter(o => {
-            const normSeg = normalizeStr(o.segmento);
-            if (!normSeg) return false;
-            return normSeg === normCell || normCell.includes(normSeg) || normSeg.includes(normCell);
-          }).length;
+          // Quantidade de operadores no Quadro vinculados a esta célula (com normalização estrita de caracteres)
+          const cleanStr = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+          const cleanCell = cleanStr(c.nome);
 
-          const totalOpsDisplay = operadores.length > 0 ? opsNaCelula : c.operadoresAtivos;
+          const matchingOps = operadores.filter(o => {
+            const cleanSeg = cleanStr(o.segmento);
+            if (!cleanSeg) return false;
+            return cleanSeg === cleanCell || cleanSeg.includes(cleanCell) || cleanCell.includes(cleanSeg);
+          });
+
+          // Extrai todos os gerentes únicos dos operadores desta célula
+          const gerentesQuadro = Array.from(new Set(
+            matchingOps
+              .map(o => o.gerente?.trim())
+              .filter((g): g is string => Boolean(g && g !== 'N/A' && g !== '-' && g !== ''))
+          ));
+
+          const gestoresDisplay = gerentesQuadro.length > 0 
+            ? gerentesQuadro.join(', ') 
+            : (c.gestor || 'Extraído do Quadro');
+
+          const totalOpsDisplay = matchingOps.length;
 
           return (
             <div
@@ -139,7 +151,7 @@ export const MatrizEspecialidadesView: React.FC = () => {
                     <button
                       onClick={() => handleOpenModal(c)}
                       className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                      title="Editar Célula"
+                      title="Editar Nome da Célula"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
@@ -157,15 +169,15 @@ export const MatrizEspecialidadesView: React.FC = () => {
                   {c.nome}
                 </h3>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Gestor: <strong className="text-slate-800 dark:text-slate-200">{c.gestor}</strong>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-normal">
+                  Gerente(s): <strong className="text-slate-800 dark:text-slate-200">{gestoresDisplay}</strong>
                 </p>
               </div>
 
               <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                 <span className="flex items-center space-x-1">
                   <Users className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Cadastrados no Quadro:</span>
+                  <span>Operadores no Quadro:</span>
                 </span>
                 <strong className="text-slate-900 dark:text-white font-mono font-bold">
                   {totalOpsDisplay} ops
@@ -199,32 +211,13 @@ export const MatrizEspecialidadesView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Gestor Responsável
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Girleide Lira"
-                  value={gestor}
-                  onChange={(e) => setGestor(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Estimativa de Operadores Ativos
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  required
-                  value={operadoresAtivos}
-                  onChange={(e) => setOperadoresAtivos(parseInt(e.target.value) || 10)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                />
+              <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg space-y-1">
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  Dados do Quadro de Operadores
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Os Gerentes e a contagem de Operadores são extraídos e atualizados automaticamente em tempo real a partir do Quadro de Operadores.
+                </p>
               </div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">

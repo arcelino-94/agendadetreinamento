@@ -54,7 +54,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'agenda',
-      label: 'Agenda de Capacidade',
+      label: 'Agenda dos Multiplicadores',
       icon: CalendarRange,
       badge: null
     },
@@ -265,44 +265,12 @@ export const Sidebar: React.FC = () => {
                 );
               })}
             </div>
-
-            {/* Sincronização Nuvem Mobile */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-              <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
-                <CloudCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span>Sincronização Nuvem (Firestore)</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    forceSaveToCloud();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  disabled={isSaving}
-                  className="flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                >
-                  <CloudUpload className="w-4 h-4" />
-                  <span>Salvar na Nuvem</span>
-                </button>
-                <button
-                  onClick={() => {
-                    forceReloadFromCloud();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  disabled={isSaving}
-                  className="flex items-center justify-center space-x-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  <CloudDownload className="w-4 h-4 text-indigo-500" />
-                  <span>Baixar da Nuvem</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
 
       {/* DESKTOP SIDEBAR (Visible on md and larger) */}
-      <aside className={`hidden md:block relative transition-all duration-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shrink-0 self-start p-2 shadow-2xs ${
+      <aside className={`hidden md:block sticky top-3 max-h-[calc(100vh-1.5rem)] overflow-y-auto no-scrollbar transition-all duration-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shrink-0 self-start p-2 shadow-2xs ${
         isCollapsed ? 'w-14' : 'w-full lg:w-56'
       }`}>
         {/* Botão de Ocultar/Mostrar Sidebar */}
@@ -330,7 +298,7 @@ export const Sidebar: React.FC = () => {
                 key={item.id}
                 onClick={() => setActiveTab(item.id as any)}
                 title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-2.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
                   isActive
                     ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 shadow-2xs'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
@@ -345,76 +313,6 @@ export const Sidebar: React.FC = () => {
             );
           })}
         </div>
-
-        {/* DESKTOP SIDEBAR CLOUD SYNC ACTIONS */}
-        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-          {!isCollapsed ? (
-            <div className="bg-indigo-50/70 dark:bg-indigo-950/40 p-2.5 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
-                <span className="flex items-center space-x-1">
-                  <CloudCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span>Sincronia Nuvem</span>
-                </span>
-                {saveStatus === 'saving' && (
-                  <Loader2 className="w-3 h-3 text-indigo-600 animate-spin" />
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-1.5">
-                <button
-                  onClick={() => forceSaveToCloud()}
-                  disabled={isSaving}
-                  className="w-full flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white py-1.5 px-2 rounded-lg text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
-                  title="Salva e força o envio do estado da máquina atual direto para o Firestore"
-                >
-                  <CloudUpload className="w-3.5 h-3.5" />
-                  <span>Salvar na Nuvem</span>
-                </button>
-
-                <button
-                  onClick={() => forceReloadFromCloud()}
-                  disabled={isSaving}
-                  className="w-full flex items-center justify-center space-x-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
-                  title="Puxa e restaura os dados mais recentes salvos na nuvem"
-                >
-                  <CloudDownload className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Baixar da Nuvem</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center space-y-1">
-              <button
-                onClick={() => forceSaveToCloud()}
-                disabled={isSaving}
-                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer"
-                title="Forçar Salvar na Nuvem"
-              >
-                <CloudUpload className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => forceReloadFromCloud()}
-                disabled={isSaving}
-                className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Baixar da Nuvem"
-              >
-                <CloudDownload className="w-4 h-4 text-indigo-500" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {!isCollapsed && (
-          <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 space-y-1">
-            <div className="flex items-center space-x-1.5 text-[11px] font-bold text-slate-800 dark:text-slate-200">
-              <AlertCircle className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span>Regra Anti-Conflito</span>
-            </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-              Bloqueio automático de choque de horários em salas e instrutores.
-            </p>
-          </div>
-        )}
       </aside>
     </>
   );

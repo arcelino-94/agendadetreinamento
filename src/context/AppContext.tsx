@@ -758,78 +758,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       frequenciasNotas: false,
     };
 
+    const mergeCloudWithLocal = <T extends { id: string }>(
+      cloudItems: T[],
+      prev: T[]
+    ): T[] => {
+      const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
+      const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
+      const retainedLocal = prev.filter(local => 
+        !cloudMap.has(local.id) && 
+        !deletedIdsRef.current.has(local.id) &&
+        Boolean(pendingSyncQueueRef.current[local.id])
+      );
+      return [...filteredCloud, ...retainedLocal];
+    };
+
     const unsubMults = subscribeToCollection<Multiplicador>('multiplicadores', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setMultiplicadores(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setMultiplicadores(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.multiplicadores) {
         seeded.multiplicadores = true;
         INITIAL_MULTIPLICADORES.forEach(item => attemptSaveItem('multiplicadores', item));
         setMultiplicadores(INITIAL_MULTIPLICADORES);
+      } else {
+        setMultiplicadores(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
     const unsubCelulas = subscribeToCollection<CelulaAtendimento>('celulas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setCelulas(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setCelulas(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.celulas) {
         seeded.celulas = true;
         INITIAL_CELULAS.forEach(item => attemptSaveItem('celulas', item));
         setCelulas(INITIAL_CELULAS);
+      } else {
+        setCelulas(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
     const unsubSalas = subscribeToCollection<SalaTreinamento>('salas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setSalas(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setSalas(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.salas) {
         seeded.salas = true;
         INITIAL_SALAS.forEach(item => attemptSaveItem('salas', item));
         setSalas(INITIAL_SALAS);
+      } else {
+        setSalas(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
     const unsubDemandas = subscribeToCollection<Demanda>('demandas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setDemandas(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setDemandas(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.demandas) {
         seeded.demandas = true;
         INITIAL_DEMANDAS.forEach(item => attemptSaveItem('demandas', item));
         setDemandas(INITIAL_DEMANDAS);
+      } else {
+        setDemandas(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
     const unsubTurmas = subscribeToCollection<Turma>('turmas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setTurmas(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setTurmas(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.turmas) {
         seeded.turmas = true;
         INITIAL_TURMAS.forEach(item => attemptSaveItem('turmas', item));
         setTurmas(INITIAL_TURMAS);
+      } else {
+        setTurmas(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
@@ -841,6 +840,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         seeded.operadores = true;
         INITIAL_OPERADORES.forEach(item => attemptSaveItem('operadores', item));
         setOperadores(INITIAL_OPERADORES);
+      } else {
+        setOperadores([]);
       }
     }, activeConfig);
 
@@ -858,31 +859,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const unsubTabulador = subscribeToCollection<AlinhamentoTabulador>('tabulador', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setTabulador(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setTabulador(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.tabulador) {
         seeded.tabulador = true;
         INITIAL_TABULADOR.forEach(item => attemptSaveItem('tabulador', item));
         setTabulador(INITIAL_TABULADOR);
+      } else {
+        setTabulador(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
     const unsubFreq = subscribeToCollection<ItemFrequenciaNota>('frequencias_notas', (cloudItems) => {
       if (cloudItems && cloudItems.length > 0) {
-        setFrequenciasNotas(prev => {
-          const filteredCloud = cloudItems.filter(item => !deletedIdsRef.current.has(item.id));
-          const cloudMap = new Map(filteredCloud.map(item => [item.id, item]));
-          const retainedLocal = prev.filter(local => !cloudMap.has(local.id) && !deletedIdsRef.current.has(local.id));
-          return [...filteredCloud, ...retainedLocal];
-        });
+        setFrequenciasNotas(prev => mergeCloudWithLocal(cloudItems, prev));
       } else if (!seeded.frequenciasNotas) {
         seeded.frequenciasNotas = true;
         INITIAL_FREQUENCIAS_NOTAS.forEach(item => attemptSaveItem('frequencias_notas', item));
         setFrequenciasNotas(INITIAL_FREQUENCIAS_NOTAS);
+      } else {
+        setFrequenciasNotas(prev => prev.filter(item => Boolean(pendingSyncQueueRef.current[item.id])));
       }
     }, activeConfig);
 
@@ -1032,23 +1027,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const line = item.trim();
       if (!line) return null;
 
-      // Check if line contains tab or space separated Matrícula/Login and Name
       let parsedMat = '';
+      let parsedLogin = '';
       let parsedNome = '';
 
       const tabSplit = line.split('\t').map(s => s.trim()).filter(Boolean);
-      if (tabSplit.length >= 2) {
+      if (tabSplit.length >= 3) {
         parsedMat = tabSplit[0];
-        parsedNome = tabSplit.slice(1).join(' ');
+        parsedLogin = tabSplit[1];
+        parsedNome = tabSplit.slice(2).join(' ');
+      } else if (tabSplit.length === 2) {
+        if (/^c\d+$/i.test(tabSplit[0])) {
+          parsedLogin = tabSplit[0];
+          parsedNome = tabSplit[1];
+        } else {
+          parsedMat = tabSplit[0];
+          parsedNome = tabSplit[1];
+        }
       } else {
-        // Try regex for leading digits/codes followed by spaces and name
         const match = line.match(/^([A-Z0-9_-]{3,10})\s+(.+)$/i);
         if (match) {
-          parsedMat = match[1];
-          parsedNome = match[2];
+          if (/^c\d+$/i.test(match[1])) {
+            parsedLogin = match[1];
+            parsedNome = match[2];
+          } else {
+            parsedMat = match[1];
+            parsedNome = match[2];
+          }
         } else {
-          // Single value or name without code
-          if (/^[A-Z]?\d{4,8}$/i.test(line)) {
+          if (/^c\d+$/i.test(line)) {
+            parsedLogin = line;
+          } else if (/^\d+$/i.test(line)) {
             parsedMat = line;
           } else {
             parsedNome = line;
@@ -1056,18 +1065,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      const searchKey = (parsedMat || parsedNome).toUpperCase();
+      const searchKey = (parsedLogin || parsedMat || parsedNome).toUpperCase();
       const q = operadores.find(op => 
-        (parsedMat && (op.matDP.toUpperCase() === parsedMat.toUpperCase() || op.loginBB.toUpperCase() === parsedMat.toUpperCase())) ||
+        (parsedLogin && op.loginBB.toUpperCase() === parsedLogin.toUpperCase()) ||
+        (parsedMat && op.matDP.toUpperCase() === parsedMat.toUpperCase()) ||
         (parsedNome && op.nome.toUpperCase() === parsedNome.toUpperCase()) ||
         op.loginBB.toUpperCase() === searchKey ||
         op.matDP.toUpperCase() === searchKey
       );
 
       return {
-        loginBB: q ? q.loginBB : (parsedMat || 'N/A'),
+        loginBB: q ? q.loginBB : parsedLogin,
         nome: parsedNome || (q ? q.nome : line),
-        matDP: parsedMat || (q ? q.matDP : 'N/A'),
+        matDP: parsedMat || (q ? q.matDP : ''),
         supervisor: q ? q.supervisor : (demandaData.supervisor || 'N/A'),
         gerente: q ? q.gerente : 'N/A',
         segmento: q ? q.segmento : (demandaData.celulaNome || 'SAC PRIORITÁRIO'),
@@ -1162,6 +1172,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const sId = demandaData.salaId || selectedSala?.id || (salas.length > 0 ? salas[0].id : 's1');
       const sNome = demandaData.salaNome || selectedSala?.nome || 'Sala 01';
 
+      const dtStart = demandaData.dataInicio || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0];
+      const dtEnd = demandaData.dataFim || dtStart;
+
       const newTurma: Turma = {
         id: `TURMA-${newId}`,
         nomeTurma: demandaData.tema || `${demandaData.tipo} - ${demandaData.celulaNome || 'GERAL'}`,
@@ -1171,7 +1184,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         multiplicadorNome: demandaData.multiplicadorNome || (multiplicadores.length > 0 ? multiplicadores[0].nome : 'T&D/BB'),
         salaId: sId,
         salaNome: sNome,
-        data: demandaData.dataInicio || demandaData.dataSolicitacao || new Date().toISOString().split('T')[0],
+        data: dtStart,
+        dataInicio: dtStart,
+        dataFim: dtEnd,
         horarioInicio: (demandaData.horarioTreinamento?.split('às')[0]?.trim()) || '14:00',
         horarioFim: (demandaData.horarioTreinamento?.split('às')[1]?.trim()) || '20:20',
         qtdParticipantes: demandaData.qtdOperadores || ops.length || 1,
@@ -1229,20 +1244,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
     markItemDeleted(id);
     markItemDeleted(`TAB-${id}`);
+    markItemDeleted(`FN-${id}`);
     
     const targetDemanda = demandas.find(d => d.id === id);
     const nextDemandas = demandas.filter(d => d.id !== id);
     const nextTabulador = tabulador.filter(t => t.id !== `TAB-${id}`);
+    const nextFreq = frequenciasNotas.filter(f => f.id !== `FN-${id}` && f.demandaId !== id);
 
     setDemandas(nextDemandas);
     setTabulador(nextTabulador);
+    setFrequenciasNotas(nextFreq);
 
     deleteItemFromFirestore('demandas', id, activeConfig);
     deleteItemFromFirestore('tabulador', `TAB-${id}`, activeConfig);
+    deleteItemFromFirestore('frequencias_notas', `FN-${id}`, activeConfig);
 
     addAuditLog('Exclusão', 'Fila de Reciclagens', `Excluiu a solicitação de demanda "${targetDemanda?.tema || id}" (${id})`);
 
-    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador, frequenciasNotas });
+    persistAndNotify({ multiplicadores, celulas, salas, demandas: nextDemandas, turmas, operadores, tabulador: nextTabulador, frequenciasNotas: nextFreq });
   };
 
   // --- Ações de Turmas ---
@@ -1356,6 +1375,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteTurma = (id: string) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
     const targetTurma = turmas.find(t => t.id === id);
     const nextTurmas = turmas.filter(t => t.id !== id);
 
@@ -1415,6 +1435,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteMultiplicador = (id: string) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
     const nextMults = multiplicadores.filter(m => m.id !== id);
     setMultiplicadores(nextMults);
     deleteItemFromFirestore('multiplicadores', id, activeConfig);
@@ -1451,6 +1472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteCelula = (id: string) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
     const nextCelulas = celulas.filter(c => c.id !== id);
     setCelulas(nextCelulas);
     deleteItemFromFirestore('celulas', id, activeConfig);
@@ -1487,6 +1509,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteSala = (id: string) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
     const nextSalas = salas.filter(s => s.id !== id);
     setSalas(nextSalas);
     deleteItemFromFirestore('salas', id, activeConfig);
@@ -1523,6 +1546,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteOperador = (id: string) => {
     const activeConfig = firebaseConfig || DEFAULT_FIREBASE_CONFIG;
+    markItemDeleted(id);
     const nextOp = operadores.filter(o => o.id !== id);
     setOperadores(nextOp);
     deleteItemFromFirestore('operadores', id, activeConfig);

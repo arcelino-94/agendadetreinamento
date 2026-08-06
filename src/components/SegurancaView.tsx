@@ -298,7 +298,7 @@ export const SegurancaView: React.FC = () => {
               >
                 <option value="todos">Todos os Módulos</option>
                 <option value="Fila de Reciclagens">Fila de Reciclagens</option>
-                <option value="Agenda de Capacidade">Agenda de Capacidade</option>
+                <option value="Agenda dos Multiplicadores">Agenda dos Multiplicadores</option>
                 <option value="Multiplicadores">Multiplicadores</option>
                 <option value="Células de Atendimento">Células de Atendimento</option>
                 <option value="Salas Treinamento">Salas Treinamento</option>
