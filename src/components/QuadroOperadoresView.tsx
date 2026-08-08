@@ -7,13 +7,19 @@ import {
   Search,
   CheckCircle,
   AlertCircle,
-  Clock
+  Clock,
+  Copy,
+  Trash2,
+  CheckSquare
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OperadorQuadro } from '../types';
 
 export const QuadroOperadoresView: React.FC = () => {
   const { operadores, bulkSetOperadores, celulas, quadroLastUpdated } = useApp();
+
+  // Multi-select Checkboxes State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Excel-style Column Filters State
   const [filters, setFilters] = useState({
@@ -72,6 +78,56 @@ export const QuadroOperadoresView: React.FC = () => {
       return matchMatDP && matchLoginBB && matchNome && matchSupervisor && matchGerente && matchEntrada && matchSegmento;
     });
   }, [operadores, filters]);
+
+  // Multi-select helpers
+  const isAllSelected = useMemo(() => {
+    if (filteredOperadores.length === 0) return false;
+    return filteredOperadores.every(op => selectedIds.has(op.id));
+  }, [filteredOperadores, selectedIds]);
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      const newSet = new Set(selectedIds);
+      filteredOperadores.forEach(op => newSet.add(op.id));
+      setSelectedIds(newSet);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const handleCopySelected = () => {
+    const selectedOps = operadores.filter(o => selectedIds.has(o.id));
+    if (selectedOps.length === 0) return;
+
+    const tsvHeader = 'Mat. DP\tLogin BB\tNome\tSupervisor\tGerente\tHorario Entrada\tSegmento\n';
+    const tsvRows = selectedOps.map(o => 
+      `${o.matDP}\t${o.loginBB}\t${o.nome}\t${o.supervisor}\t${o.gerente}\t${o.horarioEntrada}\t${o.segmento}`
+    ).join('\n');
+
+    navigator.clipboard.writeText(tsvHeader + tsvRows);
+    alert(`${selectedOps.length} operador(es) copiado(s) para a área de transferência no formato Excel!`);
+  };
+
+  const handleDeleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+
+    if (window.confirm(`Tem certeza que deseja remover ${count} operador(es) selecionado(s) do Quadro?`)) {
+      const remainingOps = operadores.filter(o => !selectedIds.has(o.id));
+      bulkSetOperadores(remainingOps);
+      setSelectedIds(new Set());
+    }
+  };
 
   // Import / Update Handler - Resets previous operators and saves ONLY newly uploaded active operators
   const handleProcessImport = () => {
@@ -156,26 +212,76 @@ export const QuadroOperadoresView: React.FC = () => {
         </div>
       </div>
 
-      {/* Info Notice Bar */}
-      <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-900/60 rounded-lg p-2.5 px-3.5 flex items-center justify-between text-xs text-indigo-900 dark:text-indigo-200">
-        <div className="flex items-center space-x-2">
-          <Search className="w-4 h-4 text-indigo-500 shrink-0" />
-          <span>
-            <strong>Filtros Excel Ativos:</strong> Use a primeira linha da tabela para pesquisar por múltiplos campos simultaneamente.
+      {/* Info Notice Bar & Selected Actions Bar */}
+      {selectedIds.size > 0 ? (
+        <div className="bg-indigo-900 dark:bg-indigo-950 text-white p-3 px-4 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-3 border border-indigo-700/80 animate-fadeIn">
+          <div className="flex items-center space-x-2">
+            <span className="bg-indigo-600 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-white shadow-xs">
+              {selectedIds.size} selecionado(s)
+            </span>
+            <span className="text-xs text-indigo-200 hidden sm:inline">
+              Ações em lote para os operadores selecionados:
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={handleCopySelected}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+              title="Copiar selecionados para área de transferência em formato Excel"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar Dados ({selectedIds.size})</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteSelected}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+              title="Excluir operadores selecionados do Quadro"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir Selecionados</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors"
+            >
+              Desmarcar Todos
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-900/60 rounded-lg p-2.5 px-3.5 flex items-center justify-between text-xs text-indigo-900 dark:text-indigo-200">
+          <div className="flex items-center space-x-2">
+            <Search className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span>
+              <strong>Seleção e Filtros Excel:</strong> Marque a caixa no cabeçalho ou em cada linha para selecionar múltiplos operadores e executar ações em lote.
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden md:inline">
+            Exibindo {filteredOperadores.length} de {operadores.length} registros
           </span>
         </div>
-        <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden md:inline">
-          Exibindo {filteredOperadores.length} de {operadores.length} registros
-        </span>
-      </div>
+      )}
 
-      {/* Tabela de Operadores com Filtros no Cabeçalho (Estilo Excel) */}
+      {/* Tabela de Operadores com Filtros e Caixas de Seleção */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               {/* Títulos das Colunas */}
               <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                <th className="px-3 py-2.5 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    title="Selecionar / Desmarcar todos os visíveis"
+                  />
+                </th>
                 <th className="px-3 py-2.5 w-28">Mat. DP</th>
                 <th className="px-3 py-2.5 w-32">Login BB</th>
                 <th className="px-3 py-2.5">Nome do Operador</th>
@@ -187,6 +293,9 @@ export const QuadroOperadoresView: React.FC = () => {
 
               {/* Linha de Filtros Múltiplos Simultâneos (Excel Style) */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                <th className="p-1.5 text-center text-[10px] text-slate-400 font-mono">
+                  {selectedIds.size > 0 ? `${selectedIds.size}` : ''}
+                </th>
                 <th className="p-1.5">
                   <input
                     type="text"
@@ -259,26 +368,45 @@ export const QuadroOperadoresView: React.FC = () => {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
               {filteredOperadores.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
                     Nenhum operador corresponde aos filtros aplicados.
                   </td>
                 </tr>
               ) : (
-                filteredOperadores.map((op) => (
-                  <tr key={op.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60 transition-colors">
-                    <td className="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400">{op.matDP}</td>
-                    <td className="px-3 py-2.5 font-mono font-bold text-indigo-600 dark:text-indigo-400">{op.loginBB}</td>
-                    <td className="px-3 py-2.5 font-bold text-slate-800 dark:text-slate-200">{op.nome}</td>
-                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{op.supervisor}</td>
-                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{op.gerente}</td>
-                    <td className="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400">{op.horarioEntrada}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                        {op.segmento}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                filteredOperadores.map((op) => {
+                  const isSelected = selectedIds.has(op.id);
+                  return (
+                    <tr 
+                      key={op.id} 
+                      onClick={() => toggleSelect(op.id)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected 
+                          ? 'bg-indigo-50/90 dark:bg-indigo-950/60 font-medium' 
+                          : 'hover:bg-indigo-50/40 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(op.id)}
+                          className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400">{op.matDP}</td>
+                      <td className="px-3 py-2.5 font-mono font-bold text-indigo-600 dark:text-indigo-400">{op.loginBB}</td>
+                      <td className="px-3 py-2.5 font-bold text-slate-800 dark:text-slate-200">{op.nome}</td>
+                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{op.supervisor}</td>
+                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{op.gerente}</td>
+                      <td className="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400">{op.horarioEntrada}</td>
+                      <td className="px-3 py-2.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          {op.segmento}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -114,26 +114,37 @@ export const MatrizEspecialidadesView: React.FC = () => {
       {/* Grid das Células */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {filteredCelulas.map((c) => {
-          // Quantidade de operadores no Quadro vinculados a esta célula (com normalização estrita de caracteres)
-          const cleanStr = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-          const cleanCell = cleanStr(c.nome);
+          // Quantidade de operadores no Quadro vinculados a esta célula (comparação estrita e limpa sem falsos positivos)
+          const normalizeKey = (str: string) => {
+            if (!str) return '';
+            return str.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          };
+
+          const cellKey = normalizeKey(c.nome);
 
           const matchingOps = operadores.filter(o => {
-            const cleanSeg = cleanStr(o.segmento);
-            if (!cleanSeg) return false;
-            return cleanSeg === cleanCell || cleanSeg.includes(cleanCell) || cleanCell.includes(cleanSeg);
+            if (!o.segmento) return false;
+            const opKey = normalizeKey(o.segmento);
+            return opKey === cellKey;
           });
 
           // Extrai todos os gerentes únicos dos operadores desta célula
           const gerentesQuadro = Array.from(new Set(
             matchingOps
               .map(o => o.gerente?.trim())
-              .filter((g): g is string => Boolean(g && g !== 'N/A' && g !== '-' && g !== ''))
+              .filter((g): g is string => Boolean(g && g !== 'N/A' && g !== '-' && g !== '' && g.toLowerCase() !== 'sem gerente'))
+          ));
+
+          // Extrai supervisores únicos
+          const supervisoresQuadro = Array.from(new Set(
+            matchingOps
+              .map(o => o.supervisor?.trim())
+              .filter((s): s is string => Boolean(s && s !== 'N/A' && s !== '-' && s !== '' && s.toLowerCase() !== 'sem supervisor'))
           ));
 
           const gestoresDisplay = gerentesQuadro.length > 0 
             ? gerentesQuadro.join(', ') 
-            : (c.gestor || 'Extraído do Quadro');
+            : (c.gestor && c.gestor !== 'Girleide Lira' ? c.gestor : 'Girleide Lira');
 
           const totalOpsDisplay = matchingOps.length;
 
@@ -172,6 +183,11 @@ export const MatrizEspecialidadesView: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-normal">
                   Gerente(s): <strong className="text-slate-800 dark:text-slate-200">{gestoresDisplay}</strong>
                 </p>
+                {supervisoresQuadro.length > 0 && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-normal">
+                    {supervisoresQuadro.length} supervisor(es) no Quadro
+                  </p>
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
